@@ -1,138 +1,68 @@
 import os
 import sys
-from datetime import datetime, timedelta
 import pandas as pd
 
-# Add root project directory to Python path so imports resolve cleanly
+# Add root project directory to Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.strategy.evaluator import (
-    evaluate_active_positions,
-    screen_market_for_entries,
-)
-from src.strategy.indicators import enrich_data_with_indicators
+from src.strategy.evaluator import screen_market_for_entries
 
+def load_historical_data() -> pd.DataFrame:
+    """Loads the 1-year synthetic market history from the CSV."""
+    csv_path = os.path.join(os.path.dirname(__file__), "..", "data", "synthetic_nse_history.csv")
+    
+    if not os.path.exists(csv_path):
+        print(f"❌ Error: Could not find synthetic data at {csv_path}")
+        print("Please run 'python scripts/generate_synthetic_history.py' first.")
+        sys.exit(1)
+        
+    print("📂 Loading 1-year synthetic history from CSV...")
+    df = pd.read_csv(csv_path)
+    
+    # Ensure dates are parsed correctly so sorting works
+    df['date'] = pd.to_datetime(df['date'])
+    return df
 
-def generate_synthetic_market_data() -> pd.DataFrame:
-    """Generates 210 days of synthetic price history for three test stocks."""
-    records = []
-    base_date = datetime.today() - timedelta(days=210)
-
-    for i in range(211):
-        current_date = (base_date + timedelta(days=i)).strftime("%Y-%m-%d")
-
-        # --- Stock 1: SCOM (Simulating a fresh Golden Cross on day 210) ---
-        # Starts flat at 10.0, then rapidly climbs to 25.0 to push 50-EMA above 200-EMA
-        scom_price = 10.0 if i < 150 else 10.0 + (i - 150) * 0.25
-        # Volume surges on the final day
-        scom_vol = 2_000_000 if i == 210 else 500_000
-        records.append(
-            {
-                "ticker": "SCOM",
-                "date": current_date,
-                "close_price": scom_price,
-                "volume": scom_vol,
-            }
-        )
-
-        # --- Stock 2: EQTY (Currently owned, simulating a Stop Loss breach) ---
-        # Price steadily drops to 20.0
-        eqty_price = max(40.0 - (i * 0.1), 15.0)
-        records.append(
-            {
-                "ticker": "EQTY",
-                "date": current_date,
-                "close_price": eqty_price,
-                "volume": 300_000,
-            }
-        )
-
-        # --- Stock 3: KCB (Currently owned, simulating a Pyramiding opportunity) ---
-        # Price climbs consistently from 20.0 to 35.0 (+75% gain)
-        kcb_price = 20.0 + (i * 0.07)
-        kcb_vol = 1_500_000 if i == 210 else 400_000  # Volume surge on last day
-        records.append(
-            {
-                "ticker": "KCB",
-                "date": current_date,
-                "close_price": kcb_price,
-                "volume": kcb_vol,
-            }
-        )
-
-    df = pd.DataFrame(records)
-
-    # Enrich each stock's timeline with EMAs, VMA, and ATR
-    enriched_dfs = []
-    for _, group in df.groupby("ticker"):
-        enriched_dfs.append(enrich_data_with_indicators(group))
-
-    return pd.concat(enriched_dfs, ignore_index=True)
-
-
-def generate_synthetic_portfolio() -> pd.DataFrame:
-    """Generates dummy active holdings for EQTY and KCB."""
-    portfolio_data = [
-        {
-            "position_id": 1,
-            "ticker": "EQTY",
-            "status": "ACTIVE",
-            "total_shares": 1000,
-            "average_entry_price": 35.0,
-            "current_stop_loss": 25.0,  # Current price is ~19.0, so this should trigger SELL
-            "pyramid_level": 0,
-        },
-        {
-            "position_id": 2,
-            "ticker": "KCB",
-            "status": "ACTIVE",
-            "total_shares": 500,
-            "average_entry_price": 22.0,  # Current price is ~34.7, >5% profit
-            "current_stop_loss": 28.0,
-            "pyramid_level": 0,  # Level 0, eligible for scale-in
-        },
-    ]
-    return pd.DataFrame(portfolio_data)
-
-
-def run_unit_tests():
-    print("🧪 Running Strategy Evaluator Test Suite...\n")
-
-    # 1. Load synthetic data
-    market_df = generate_synthetic_market_data()
-    portfolio_df = generate_synthetic_portfolio()
-
-    owned_tickers = portfolio_df["ticker"].tolist()
-
-    # 2. Test Phase A: Active Position Evaluation (Exits & Scale-Ins)
-    print("--- Phase A: Evaluating Owned Positions (EQTY, KCB) ---")
-    portfolio_signals = evaluate_active_positions(portfolio_df, market_df)
-
-    if portfolio_signals:
-        for sig in portfolio_signals:
-            print(f"  [SIGNAL] {sig['action']} on {sig['ticker']}")
-            print(f"           Reason: {sig['reason']}")
-            if "new_stop_loss" in sig:
-                print(f"           New Stop Loss: KES {sig['new_stop_loss']:.2f}")
-    else:
-        print("  No portfolio signals generated.")
-
-    print("\n" + "=" * 50 + "\n")
-
-    # 3. Test Phase B: Market Screening (Unowned Tickers: SCOM)
-    print("--- Phase B: Screening Broader Market (Unowned: SCOM) ---")
-    market_signals = screen_market_for_entries(market_df, owned_tickers)
-
-    if market_signals:
-        for sig in market_signals:
-            print(f"  [SIGNAL] {sig['action']} on {sig['ticker']}")
-            print(f"           Reason: {sig['reason']}")
-            print(
-                f"           Suggested Stop Loss: KES {sig['suggested_stop_loss']:.2f}"
-            )
-    else:
-        print("  No entry signals generated.")
-
+def run_historical_backtest():
+    print("🧪 Running 1-Year Historical Backtest Simulator...\n")
+    
+    market_df = load_historical_data()
+    
+    # For this test, we assume we own nothing, so we pass an empty list to 'owned_tickers'
+    owned_tickers = []
+    
+    # We want to see how many signals the bot would have generated over the ENTIRE year,
+    # not just on the last day. So we must loop through the timeline.
+    
+    # Get a list of all unique dates in the dataset, sorted chronologically
+    all_dates = sorted(market_df['date'].unique())
+    
+    total_signals_generated = 0
+    
+    print("-" * 50)
+    print(f"📅 Simulating {len(all_dates)} trading days...")
+    print("-" * 50)
+    
+    # The Time Machine Loop: Step through history day by day
+    for current_date in all_dates:
+        # Filter the universe to only show data UP TO the 'current_date'
+        # This prevents the bot from "cheating" by seeing future prices (Look-ahead bias)
+        historical_slice = market_df[market_df['date'] <= current_date]
+        
+        # Pass that historical slice into our entry screener
+        daily_signals = screen_market_for_entries(historical_slice, owned_tickers)
+        
+        if daily_signals:
+            date_str = pd.to_datetime(current_date).strftime('%Y-%m-%d')
+            for sig in daily_signals:
+                print(f"[{date_str}] 🟢 BUY ALERT: {sig['ticker']} | Stop Loss: KES {sig['suggested_stop_loss']:.2f}")
+                total_signals_generated += 1
+                
+                # If you wanted to build a full backtester, you would append this ticker
+                # to 'owned_tickers' here so it tracks the portfolio over time!
+                
+    print("-" * 50)
+    print(f"✅ Backtest Complete. Total Buy Signals Generated: {total_signals_generated}")
 
 if __name__ == "__main__":
-    run_unit_tests()
+    run_historical_backtest()
