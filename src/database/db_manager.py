@@ -45,6 +45,20 @@ def initialize_database():
             shares INTEGER
         )
     ''')
+
+    # 4. Active Portfolio Table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS portfolio (
+            position_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT,
+            entry_price REAL,
+            current_stop_loss REAL,   -- Updates based on ATR calculations
+            shares INTEGER,
+            pyramid_level INTEGER DEFAULT 1, -- Tracks scaling into winning positions
+            status TEXT DEFAULT 'OPEN',
+            FOREIGN KEY (ticker) REFERENCES assets (ticker)
+        )
+    ''')
     
     conn.commit()
     conn.close()
