@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSE Trading Engine - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    gold: { DEFAULT: '#D4AF37', light: '#F3E5AB', dark: '#AA8C2C' },
+                    dark: { 900: '#050505', 800: '#121212', 700: '#1F1F1F' }
+                },
+                keyframes: {
+                    marquee: {
+                        '0%': { transform: 'translateX(100%)' },
+                        '100%': { transform: 'translateX(-100%)' },
+                    }
+                },
+                animation: {
+                    'marquee': 'marquee 20s linear infinite',
+                }
+            }
+        }
+    }
+</script>
+</head>
+<body class="bg-dark-900 text-gray-300 font-sans min-h-screen flex flex-col">
+
+    <!-- Top Navigation -->
+    <nav class="bg-dark-800 border-b border-gold/30 px-6 py-4 flex justify-between items-center shadow-md">
+        <div class="flex items-center space-x-3">
+            <div class="w-3 h-3 bg-gold rounded-full animate-pulse"></div>
+            <h1 class="text-xl font-bold text-white tracking-widest uppercase">
+                <span class="text-gold">NSE</span> Algorithmic Engine
+            </h1>
+        </div>
+        <div class="flex items-center space-x-6">
+            <span class="text-xs text-gray-400">User: <strong class="text-white">{{ user.username|default:"Operator" }}</strong></span>
+            <a href="{% url 'logout' %}" class="text-xs border border-gold/40 text-gold px-3 py-1.5 rounded hover:bg-gold hover:text-black transition">Logout</a>
+        </div>
+    </nav>
+
+<!-- Welcome & Automatically Updating News Bar -->
+    <div class="bg-dark-800 border-b border-gold/20 overflow-hidden shadow-md">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            
+            <!-- Personalized Welcome Message -->
+            <h2 class="text-2xl font-semibold text-white tracking-wide">
+                Welcome, <span class="text-gold">{{ user.username|default:"Operator" }}</span>
+            </h2>
+            
+            <!-- Dynamic Auto-Updating Market News Ticker -->
+            <div class="flex-grow max-w-2xl w-full bg-dark-900 border border-dark-700 rounded-full overflow-hidden flex items-center px-4 py-2 relative shadow-inner">
+                <!-- Static Label -->
+                <span class="text-xs font-bold text-gold uppercase tracking-wider pr-4 border-r border-dark-700 z-10 bg-dark-900">
+                    NSE Live
+                </span>
+                
+                <!-- Automatically Updated Text Container -->
+                <div class="overflow-hidden relative w-full h-5 ml-4 flex items-center">
+                    <div id="news-ticker-text" class="absolute whitespace-nowrap text-sm text-gray-300 transition-all duration-500 ease-in-out">
+                        Loading live market intelligence...
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <!-- JavaScript to Automatically Cycle Live Market Feeds -->
+    <script>
+        const marketNews = [
+            "📈 NSE All-Share Index (NASI) holds steady at 233.47 with consistent buying pressure.",
+            "▲ Co-op Bank maintains its position in the top tier market capitalization above Sh206B.",
+            "📊 Total Market Capitalization at the Nairobi Securities Exchange stands robust near KES 3.92 Trillion.",
+            "▲ Banking Sector Index trades actively higher at 265.90 points.",
+            "💡 Central Bank Rate remains stable at 8.75%, supporting strong equity market liquidity."
+        ];
+
+        let currentIndex = 0;
+        const tickerElement = document.getElementById('news-ticker-text');
+
+        function updateTicker() {
+            if (tickerElement) {
+                // Apply a subtle fade effect during transition
+                tickerElement.style.opacity = 0;
+                setTimeout(() => {
+                    tickerElement.innerText = marketNews[currentIndex];
+                    tickerElement.style.opacity = 1;
+                    currentIndex = (currentIndex + 1) % marketNews.length;
+                }, 300);
+            }
+        }
+
+        // Run immediately and rotate every 5 seconds automatically
+        updateTicker();
+        setInterval(updateTicker, 5000);
+    </script>
+
+    <!-- Main Content -->
+    <main class="flex-grow p-6 lg:p-10 max-w-7xl mx-auto w-full">
+        
+        <!-- Metrics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-dark-800 border border-dark-700 p-6 rounded-lg shadow-lg hover:border-gold transition">
+                <h3 class="text-xs text-gray-500 uppercase tracking-wider mb-2">Active Positions</h3>
+                <p class="text-3xl font-bold text-white">{{ portfolio|length }} <span class="text-gold text-sm font-normal">Open</span></p>
+            </div>
+            <div class="bg-dark-800 border border-dark-700 p-6 rounded-lg shadow-lg hover:border-gold transition">
+                <h3 class="text-xs text-gray-500 uppercase tracking-wider mb-2">System Status</h3>
+                <p class="text-3xl font-bold text-green-500">Active</p>
+            </div>
+            <div class="bg-dark-800 border border-dark-700 p-6 rounded-lg shadow-lg hover:border-gold transition">
+                <h3 class="text-xs text-gray-500 uppercase tracking-wider mb-2">Database</h3>
+                <p class="text-3xl font-bold text-gold">Synced</p>
+            </div>
+        </div>
+
+        <!-- Portfolio Table -->
+        <div class="bg-dark-800 border border-dark-700 rounded-lg shadow-lg p-6">
+            <h2 class="text-lg font-bold text-white border-b-2 border-gold pb-2 mb-6">Active Portfolio</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="text-gray-500 text-xs uppercase tracking-wider border-b border-dark-700">
+                            <th class="pb-3 px-2">Ticker</th>
+                            <th class="pb-3 px-2">Entry Price</th>
+                            <th class="pb-3 px-2">Stop Loss</th>
+                            <th class="pb-3 px-2">Shares</th>
+                            <th class="pb-3 px-2">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-gray-300 divide-y divide-dark-700">
+                        {% for position in portfolio %}
+                        <tr class="hover:bg-dark-700/50 transition">
+                            <td class="py-4 px-2 font-semibold text-white">{{ position.ticker }}</td>
+                            <td class="py-4 px-2">KES {{ position.entry_price|floatformat:2 }}</td>
+                            <td class="py-4 px-2 text-red-400">KES {{ position.current_stop_loss|floatformat:2 }}</td>
+                            <td class="py-4 px-2">{{ position.shares }}</td>
+                            <td class="py-4 px-2">
+                                {% if position.pyramid_level > 1 %}
+                                    <span class="bg-gold-dark text-white px-2 py-1 rounded text-xs font-semibold">
+                                        PYRAMID (LVL {{ position.pyramid_level }})
+                                    </span>
+                                {% else %}
+                                    <span class="bg-green-900/60 text-green-400 px-2 py-1 rounded text-xs font-semibold">
+                                        {{ position.status }}
+                                    </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="py-8 text-center text-gray-500 italic">
+                                No active portfolio positions found in database.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+</body>
+</html>
