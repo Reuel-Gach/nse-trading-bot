@@ -12,14 +12,14 @@ except ImportError:
 
 # Import your components (adjust filenames if your scraper path differs slightly)
 try:
-    from src.ingestion.nse_scraper import scrape_nse_market_data
+    from ingestion.scraper import scrape_nse_market_data
 except ImportError:
     # Fallback mock if scraper function name differs
     def scrape_nse_market_data():
         print("⚠️ Ingestion scraper module not found or named differently. Using fallback sample.")
         return []
 
-from src.notifications.gmail_alert import format_and_dispatch_signals
+from notifications.gmail_alerts import format_and_dispatch_signals
 
 def run_live_test():
     print("🚀 Starting live NSE market data test...")
