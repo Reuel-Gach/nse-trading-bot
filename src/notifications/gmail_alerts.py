@@ -130,7 +130,7 @@ def format_and_dispatch_signals(
         email_body += "\n"
 
     email_body += "=" * 55 + "\n"
-    email_body += "Automated by Reuel's NSE Quantitative Bot | Nairobi Securities Exchange"
+    email_body += "Automated by Reuel & Banice's NSE Quantitative Bot | Nairobi Securities Exchange"
 
     # --- 4. CONSTRUCT & DISPATCH EMAIL ---
     msg = MIMEMultipart()
@@ -156,7 +156,6 @@ def format_and_dispatch_signals(
 
 # Quick Local Test — Try running: python src/notifications/gmail_alerts.py
 if __name__ == "__main__":
-    # Test 1: Simulating a Heartbeat day with NO active alerts
     mock_health = {
         "status": "🟢 All Systems Operational",
         "api": "MyStocks EOD Scraper",
@@ -183,7 +182,6 @@ if __name__ == "__main__":
         ]
     }
 
-    # Dispatching with zero alerts (Heartbeat mode)
     format_and_dispatch_signals(
         signals=[],
         system_health=mock_health,

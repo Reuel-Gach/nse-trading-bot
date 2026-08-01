@@ -1,4 +1,3 @@
-from pyexpat.errors import messages
 import sqlite3
 import os
 from django.shortcuts import redirect, render
@@ -8,6 +7,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 
+@login_required(login_url='login')
 def dashboard_view(request):
     # Navigate up one directory to find the bot's database
     db_path = os.path.join(settings.BASE_DIR.parent, "market_data.sqlite")
@@ -16,12 +16,13 @@ def dashboard_view(request):
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
+    # Filter positions to only show those belonging to the currently logged-in user
     cursor.execute("""
         SELECT position_id, ticker, entry_price, current_stop_loss, shares, pyramid_level, status 
         FROM portfolio 
-        WHERE status != 'CLOSED'
+        WHERE username = ? AND status != 'CLOSED'
         ORDER BY position_id DESC
-    """)
+    """, (request.user.username,))
     
     positions = cursor.fetchall()
     conn.close()

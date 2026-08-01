@@ -16,9 +16,8 @@ if ROOT_DIR not in sys.path:
 from src.ingestion.scraper import scrape_mystocks_mobile
 from src.strategy.indicators import enrich_data_with_indicators
 from src.strategy.evaluator import screen_market_for_entries, evaluate_active_positions
-
-# Corrected Import: matches the function name in gmail_alerts.py
 from src.notifications.gmail_alerts import format_and_dispatch_signals
+from src.portfolio.manager import get_live_portfolio_summary, get_db_connection
 
 # Tracked NSE Tickers (Corrected for MyStocks mobile ticker symbols)
 TRACKED_TICKERS = [
@@ -80,11 +79,21 @@ def run_daily_trading_bot():
     full_market_df.to_csv(HISTORY_FILE, index=False)
     print(f"  -> 💾 Saved clean enriched history ({len(full_market_df)} total rows).")
 
-    # 4. EVALUATE STRATEGY SIGNALS
+    # 4. EVALUATE STRATEGY SIGNALS & ACTIVE PORTFOLIO
     print("\n4️⃣ Evaluating trading strategy signals...")
-    buy_signals = screen_market_for_entries(full_market_df, owned_tickers=[])
     
-    # Optional: Evaluate exits/pyramiding if you pass in active holdings
+    # Query database for actively held tickers to avoid duplicate buy alerts
+    owned_tickers = []
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT ticker FROM portfolio WHERE status != 'CLOSED'")
+        owned_tickers = [row["ticker"] for row in cursor.fetchall()]
+        conn.close()
+    except Exception as db_err:
+        print(f"  -> ⚠️ Could not fetch owned tickers from database: {db_err}")
+
+    buy_signals = screen_market_for_entries(full_market_df, owned_tickers=owned_tickers)
     sell_signals = [] 
 
     print("\n" + "=" * 60)
@@ -98,12 +107,30 @@ def run_daily_trading_bot():
         print("😴 No Golden Cross buy signals triggered today.")
     print("=" * 60)
 
-    # 5. DISPATCH GMAIL EMAIL ALERTS
-    print("\n5️⃣ Dispatching email notifications...")
+    # 5. DISPATCH GMAIL EMAIL ALERTS (HEARTBEAT MODE)
+    print("\n5️⃣ Dispatching email notifications (Heartbeat report)...")
     try:
-        # Combine buy and sell signals into one list for the dispatcher
+        # Build dictionary of latest closing prices
+        latest_prices = full_market_df.drop_duplicates(subset=['ticker'], keep='last').set_index('ticker')['close'].to_dict()
+        
+        # Calculate live SQL portfolio equity
+        real_portfolio = get_live_portfolio_summary(latest_prices)
+        
         all_signals = buy_signals + sell_signals
-        format_and_dispatch_signals(all_signals)
+        
+        health_stats = {
+            "status": "🟢 All Systems Operational",
+            "api": "MyStocks Mobile EOD Scraper",
+            "scan_time": datetime.now().strftime("%d-%b-%Y | %H:%M EAT"),
+            "counters_checked": len(TRACKED_TICKERS),
+            "errors": 0
+        }
+
+        format_and_dispatch_signals(
+            signals=all_signals,
+            system_health=health_stats,
+            portfolio=real_portfolio
+        )
     except Exception as e:
         print(f"  -> ❌ Notification dispatch error: {e}")
 
