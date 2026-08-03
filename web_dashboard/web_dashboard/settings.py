@@ -76,7 +76,11 @@ WSGI_APPLICATION = 'web_dashboard.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': BASE_DIR / 'nse-bot-db',
+        'USER': 'postgres',
+        'PASSWORD': 'Reuel123!',
+        'HOST': 'localhost',
+        'PORT': '8010', 
     }
 }
 

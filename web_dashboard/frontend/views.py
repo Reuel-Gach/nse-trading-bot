@@ -1,4 +1,8 @@
+from django.http import JsonResponse
+import pandas as pd
 import sqlite3
+from django.http import HttpResponse, StreamingHttpResponse
+import time
 import os
 from django.shortcuts import redirect, render
 from django.conf import settings
@@ -6,6 +10,101 @@ from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.db import connection
+
+def stream_logs(request):
+    """
+    Streams log file contents line-by-line in real-time (similar to tail -f).
+    """
+    # Define the path to your trading bot's log file
+    # Adjust this path based on where your bot saves its logs
+    log_file_path = os.path.join(settings.BASE_DIR, '../logs/trading_bot.log') 
+
+    def log_generator():
+        # Check if file exists, if not wait or yield a notice
+        if not os.path.exists(log_file_path):
+            yield "data: Log file not found. Waiting for bot to initialize...\n\n"
+            while not os.path.exists(log_file_path):
+                time.sleep(2)
+
+        with open(log_file_path, 'r') as f:
+            # Move to the end of the file to read only new logs (or omit to read from start)
+            f.seek(0, os.SEEK_END)
+            
+            while True:
+                line = f.readline()
+                if not line:
+                    time.sleep(0.5)  # Sleep briefly if no new line is written
+                    continue
+                
+                # Format as Server-Sent Events (SSE) data
+                yield f"data: {line.strip()}\n\n"
+
+    response = StreamingHttpResponse(log_generator(), content_type='text/event-stream')
+    response['Cache-Control'] = 'no-cache'
+    return response
+
+@login_required(login_url='login')
+def chart_data(request, ticker):
+    # 1. Query PostgreSQL using Django's active database connection
+    query = """
+        SELECT date as time, open, high, low, close, volume 
+        FROM historical_prices 
+        WHERE ticker = %s 
+        ORDER BY date ASC
+    """
+    
+    with connection.cursor() as cursor:
+        cursor.execute(query, [ticker])
+        columns = [col[0] for col in cursor.description]
+        data = cursor.fetchall()
+        
+    # 2. Load the data into a Pandas DataFrame
+    df = pd.DataFrame(data, columns=columns)
+    
+    # Safety Check: If no data exists, return empty arrays to prevent frontend crashes
+    if df.empty:
+        return JsonResponse({
+            "ticker": ticker, 
+            "candles": [], 
+            "volume": [], 
+            "ema50": [], 
+            "ema200": []
+        })
+    
+    # 3. Calculate 50 EMA and 200 EMA using Pandas
+    # span=X controls the decay weight, adjust=False uses the standard recursive EMA formula
+    df['ema50'] = df['close'].ewm(span=50, adjust=False).mean().round(2)
+    df['ema200'] = df['close'].ewm(span=200, adjust=False).mean().round(2)
+    
+    # 4. Format the Data for TradingView
+    # Convert dates to the string format TradingView requires: 'YYYY-MM-DD'
+    df['time'] = pd.to_datetime(df['time']).dt.strftime('%Y-%m-%d')
+    
+    # Extract the Candlesticks
+    candles = df[['time', 'open', 'high', 'low', 'close']].to_dict(orient='records')
+    
+    # Extract the Volume and dynamically color it based on daily performance
+    # Green if the closing price is higher than the open, Red if it dropped
+    df['volume_color'] = df.apply(
+        lambda row: 'rgba(34, 197, 94, 0.4)' if row['close'] >= row['open'] else 'rgba(239, 68, 68, 0.4)', 
+        axis=1
+    )
+    volume = df.rename(columns={'volume': 'value', 'volume_color': 'color'})[['time', 'value', 'color']].to_dict(orient='records')
+    
+    # Extract the EMAs
+    ema50 = df.rename(columns={'ema50': 'value'})[['time', 'value']].to_dict(orient='records')
+    ema200 = df.rename(columns={'ema200': 'value'})[['time', 'value']].to_dict(orient='records')
+    
+    # 5. Send the structured payload back to the frontend
+    return JsonResponse({
+        "ticker": ticker,
+        "candles": candles,
+        "volume": volume,
+        "ema50": ema50,
+        "ema200": ema200
+    })
+
 
 @login_required(login_url='login')
 def dashboard_view(request):
@@ -28,6 +127,7 @@ def dashboard_view(request):
     conn.close()
     
     return render(request, "dashboard.html", {"portfolio": positions})
+
 
 def login_view(request):
     # If the user submits the login form

@@ -5,13 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NSE Trading Engine - Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
+  <script>
     tailwind.config = {
         theme: {
             extend: {
                 colors: {
-                    gold: { DEFAULT: '#D4AF37', light: '#F3E5AB', dark: '#AA8C2C' },
-                    dark: { 900: '#050505', 800: '#121212', 700: '#1F1F1F' }
+                    // The Premium Accent
+                    gold: { 
+                        DEFAULT: '#D4AF37', 
+                        light: '#F3E5AB', 
+                        dark: '#AA8C2C' 
+                    },
+                    // The Terminal Backgrounds
+                    dark: { 
+                        950: '#0a0a0a', // Deepest black (Outer background)
+                        900: '#121212', // Standard panel background
+                        800: '#1c1c1c', // Lighter panel/hover state
+                        700: '#2a2a2a'  // Borders and dividers
+                    }
+                },
+                fontFamily: {
+                    mono: ['Courier New', 'monospace'], // For data and logs
+                    sans: ['Inter', 'system-ui', 'sans-serif'], // For readable UI text
                 },
                 keyframes: {
                     marquee: {
@@ -28,6 +43,31 @@
 </script>
 </head>
 <body class="bg-dark-900 text-gray-300 font-sans min-h-screen flex flex-col">
+
+<!-- phone architecture-->
+ <main class = "flex-grow p-4 lg:p-6 max-w-[1600px] mx-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Left Column logs-->
+    <div class="lg:col-span-1">
+        <div class="bg-dark-800 border border-dark-700 rounded-lg p-4 shadow-md">
+            <h2 class="text-lg font-semibold text-white mb-4">System Logs</h2>
+            <div class="space-y-2">
+                <!-- Log entries would go here -->
+                 
+
+
+
+            </div>
+        </div>
+    </div>
+    <!-- Right Column - Trading View-->
+    <div class = "space-y-6">
+
+
+
+
+    </div>
+ </main>
+       
 
     <!-- Top Navigation -->
     <nav class="bg-dark-800 border-b border-gold/30 px-6 py-4 flex justify-between items-center shadow-md">
@@ -164,6 +204,124 @@
             </div>
         </div>
     </main>
+    <!-- Success -->
+<span class="bg-green-900/40 border border-green-700 text-green-400 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
+    Active
+</span>
 
+<!-- Warning / Pyramided Position -->
+<span class="bg-yellow-900/40 border border-yellow-700 text-yellow-500 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
+    Pyramided
+</span>
+
+<!-- Danger / Stop Loss Hit -->
+<span class="bg-red-900/40 border border-red-700 text-red-400 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
+    Closed
+</span>
+<button class="text-xs text-gold border border-gold/30 px-4 py-2 rounded hover:bg-gold hover:text-black hover:font-bold transition-all duration-200">
+    Execute Trade
+</button>
+<script>
+    // 1. Initialize the Chart Container
+    const chartContainer = document.getElementById('tvchart');
+    const chart = LightweightCharts.createChart(chartContainer, {
+        layout: {
+            background: { type: 'solid', color: '#0a0a0a' }, // Deep terminal black
+            textColor: '#d1d4dc',
+        },
+        grid: {
+            vertLines: { color: '#1c1c1c' },
+            horzLines: { color: '#1c1c1c' },
+        },
+        crosshair: {
+            mode: LightweightCharts.CrosshairMode.Normal,
+        },
+        rightPriceScale: {
+            borderColor: '#2a2a2a',
+        },
+        timeScale: {
+            borderColor: '#2a2a2a',
+            timeVisible: true,
+        },
+    });
+
+    // 2. Add the Candlestick Series (Price Action)
+    const candlestickSeries = chart.addCandlestickSeries({
+        upColor: '#22c55e',       // Tailwind green-500
+        downColor: '#ef4444',     // Tailwind red-500
+        borderVisible: false,
+        wickUpColor: '#22c55e',
+        wickDownColor: '#ef4444',
+    });
+
+    // 3. Add the Volume Histogram (Market Participation)
+    const volumeSeries = chart.addHistogramSeries({
+        color: '#26a69a',
+        priceFormat: { type: 'volume' },
+        priceScaleId: '', // Setting this to an empty string overlays it on the main chart
+        scaleMargins: {
+            top: 0.8,     // Pushes the volume bars to the bottom 20% of the chart
+            bottom: 0,
+        },
+    });
+
+    // 4. Add the Moving Averages (50 EMA & 200 EMA)
+    const ema50Series = chart.addLineSeries({
+        color: '#3b82f6', // Tailwind blue-500
+        lineWidth: 2,
+        title: '50 EMA',
+    });
+
+    const ema200Series = chart.addLineSeries({
+        color: '#D4AF37', // Your custom UI Gold
+        lineWidth: 2,
+        title: '200 EMA',
+    });
+
+    // 5. Fetch Data from the Django Backend
+    async function loadChartData(ticker) {
+        try {
+            const response = await fetch(`/api/chart/${ticker}/`);
+            const data = await response.json();
+            
+            // Map the JSON to the specific series TradingView requires
+            candlestickSeries.setData(data.candles);
+            volumeSeries.setData(data.volume);
+            ema50Series.setData(data.ema50);
+            ema200Series.setData(data.ema200);
+
+            // Automatically zoom to fit all data perfectly
+            chart.timeScale().fitContent();
+        } catch (error) {
+            console.error("Error fetching NSE market data:", error);
+        }
+    }
+
+    // 6. Handle Ticker Dropdown Changes
+    const tickerSelect = document.getElementById('ticker-select');
+    tickerSelect.addEventListener('change', (event) => {
+        loadChartData(event.target.value);
+    });
+
+    // Load initial data on startup
+    loadChartData(tickerSelect.value);
+
+    // Make chart responsive to browser resizing
+    window.addEventListener('resize', () => {
+        chart.resize(chartContainer.clientWidth, chartContainer.clientHeight);
+    });
+
+    const evtSource = new EventSource("/api/logs/");
+const logContainer = document.getElementById("log-output");
+
+evtSource.onmessage = function(event) {
+    const newLogLine = document.createElement("div");
+    newLogLine.textContent = event.data;
+    logContainer.appendChild(newLogLine);
+    
+    // Auto-scroll to the latest log entry
+    logContainer.scrollTop = logContainer.scrollHeight;
+};
+</script>
 </body>
 </html>
