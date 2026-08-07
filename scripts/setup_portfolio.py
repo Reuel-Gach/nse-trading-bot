@@ -22,7 +22,7 @@ def setup_reuel_portfolio():
     init_portfolio_db()
 
     # Target Username
-    TARGET_USER = "reuel"
+    TARGET_USER = "Reuel"
 
     # 2. Set cash balance (e.g., KES 2,000.00 unallocated cash)
     set_cash_balance(TARGET_USER, 2000.00)

@@ -7,19 +7,14 @@ ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DB_PATH = os.path.join(ROOT_DIR, "market_data.sqlite")
 
 def get_db_connection() -> sqlite3.Connection:
-    """Returns a connection to the SQLite market_data database with Row factory enabled."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_portfolio_db() -> None:
-    """
-    Initializes the required database schema with multi-user (username) support.
-    """
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Account table to track available cash per user
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS account (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,7 +23,6 @@ def init_portfolio_db() -> None:
         )
     """)
     
-    # Portfolio table to track active stock holdings per user
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS portfolio (
             position_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,17 +36,15 @@ def init_portfolio_db() -> None:
         )
     """)
     
-    # Add username column if updating an existing table migration
     try:
         cursor.execute("ALTER TABLE portfolio ADD COLUMN username TEXT DEFAULT 'reuel'")
     except sqlite3.OperationalError:
-        pass  # Column already exists
+        pass  
         
     conn.commit()
     conn.close()
 
 def set_cash_balance(username: str, amount: float) -> None:
-    """Updates or inserts the available cash balance for a specific user."""
     init_portfolio_db()
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -66,7 +58,6 @@ def set_cash_balance(username: str, amount: float) -> None:
     print(f"💰 Cash balance for '{username}' set to KES {amount:,.2f}")
 
 def add_position(username: str, ticker: str, entry_price: float, shares: int, stop_loss: float) -> None:
-    """Adds a stock position assigned to a specific username."""
     init_portfolio_db()
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -79,19 +70,14 @@ def add_position(username: str, ticker: str, entry_price: float, shares: int, st
     print(f"📈 Added [{username}]: {shares} shares of {ticker} @ KES {entry_price:.2f} (Stop Loss: KES {stop_loss:.2f})")
 
 def get_live_portfolio_summary(latest_prices_dict: Dict[str, float], username: str = "reuel") -> Dict[str, Any]:
-    """
-    Calculates live portfolio valuation and unrealized PnL for a given user.
-    """
     init_portfolio_db()
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Fetch liquid cash for username
     cursor.execute("SELECT available_cash FROM account WHERE username = ?", (username,))
     cash_row = cursor.fetchone()
     cash = cash_row["available_cash"] if cash_row else 0.0
     
-    # Fetch open positions for username
     cursor.execute("SELECT * FROM portfolio WHERE username = ? AND status != 'CLOSED'", (username,))
     positions = cursor.fetchall()
     conn.close()
@@ -129,3 +115,34 @@ def get_live_portfolio_summary(latest_prices_dict: Dict[str, float], username: s
         "daily_change_pct": 0.0,
         "open_positions": open_positions
     }
+
+# --- NEW HELPER FUNCTIONS FOR PERSONALIZED EMAILS ---
+
+def get_active_users() -> List[str]:
+    """Returns a list of usernames that have active positions in the bot DB."""
+    init_portfolio_db()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT username FROM portfolio WHERE status != 'CLOSED'")
+    users = [row["username"] for row in cursor.fetchall()]
+    conn.close()
+    return users
+
+def get_user_email(username: str) -> str:
+    """Fetches the user's registered email address directly from Django's database."""
+    django_db_path = os.path.join(ROOT_DIR, "web_dashboard", "db.sqlite3")
+    if not os.path.exists(django_db_path):
+        return None
+        
+    try:
+        conn = sqlite3.connect(django_db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        # Query Django's built-in auth_user table
+        cursor.execute("SELECT email FROM auth_user WHERE username = ?", (username,))
+        row = cursor.fetchone()
+        conn.close()
+        return row["email"] if row else None
+    except sqlite3.Error as e:
+        print(f"DB Error fetching email: {e}")
+        return None

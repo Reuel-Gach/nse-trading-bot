@@ -108,6 +108,15 @@
             </div>
             
         </div>
+        <!-- Terminal Output Text with HTMX Polling -->
+<div class="p-4 flex-grow overflow-y-auto font-mono text-[11px] leading-relaxed space-y-2"
+     hx-get="/api/logs/" 
+     hx-trigger="every 5s" 
+     hx-swap="innerHTML">
+    
+    <div class="text-gray-500">Connecting to Python backend...</div>
+    <div class="animate-pulse w-2 h-4 bg-gray-400 mt-2"></div>
+</div>
     </div>
 
     <!-- JavaScript to Automatically Cycle Live Market Feeds -->
