@@ -23,11 +23,24 @@ TRACKED_TICKERS = [
 ]
 
 HISTORY_FILE = os.path.join(ROOT_DIR, "data", "nse_historical_data.csv")
+LOCK_FILE = os.path.join(ROOT_DIR, "logs", "last_email_date.txt")
 
 def run_daily_trading_bot():
     print("=" * 60)
     print(f"🚀 NSE TRADING BOT — DAILY RUN ({datetime.today().strftime('%Y-%m-%d %H:%M:%S')})")
     print("=" * 60)
+
+    # --- 0. CHECK FOR DAILY EMAIL LOCK ---
+    TODAY_STR = datetime.now().strftime('%Y-%m-%d')
+    os.makedirs(os.path.join(ROOT_DIR, "logs"), exist_ok=True)
+    
+    if os.path.exists(LOCK_FILE):
+        with open(LOCK_FILE, "r") as f:
+            last_sent = f.read().strip()
+        if last_sent == TODAY_STR:
+            print(f"⏩ Market update already dispatched today ({TODAY_STR}).")
+            print("   Cron triggered, but skipping execution to prevent duplicate emails.")
+            return
 
     print("\n1️⃣ Scraping EOD market prices from MyStocks...")
     today_df = scrape_mystocks_mobile(TRACKED_TICKERS)
@@ -41,7 +54,8 @@ def run_daily_trading_bot():
         if 'close_price' in history_df.columns:
             history_df['close'] = history_df['close'].combine_first(history_df.get('close_price'))
             history_df = history_df.drop(columns=['close_price'])
-        old_indicators = [c for c in ['ema_50', 'ema_200', 'vma_20', 'atr_14'] if c in history_df.columns]
+        # Drop old indicators to ensure they are recalculated freshly with RSI
+        old_indicators = [c for c in ['ema_50', 'ema_200', 'vma_20', 'atr_14', 'rsi_14'] if c in history_df.columns]
         history_df = history_df.drop(columns=old_indicators)
     else:
         history_df = pd.DataFrame()
@@ -49,7 +63,7 @@ def run_daily_trading_bot():
     combined_df = pd.concat([history_df, today_df], ignore_index=True)
     combined_df = combined_df.drop_duplicates(subset=['ticker', 'date'], keep='last').sort_values(by=['ticker', 'date'])
 
-    print("\n3️⃣ Computing technical indicators (50-EMA, 200-EMA, VMA, ATR)...")
+    print("\n3️⃣ Computing technical indicators (50-EMA, 200-EMA, VMA, ATR, RSI)...")
     enriched_dfs = [enrich_data_with_indicators(group) for _, group in combined_df.groupby("ticker")]
     full_market_df = pd.concat(enriched_dfs, ignore_index=True)
 
@@ -62,26 +76,54 @@ def run_daily_trading_bot():
     sell_signals = [] 
     all_signals = buy_signals + sell_signals
 
-    print("\n" + "=" * 60)
-    print("📊 DAILY SIGNAL REPORT")
-    print("=" * 60)
-    if buy_signals:
-        for sig in buy_signals:
-            print(f"🟢 [BUY ALERT] {sig['ticker']} | {sig['reason']} | Stop: KES {sig.get('suggested_stop_loss', 0):.2f}")
+    # --- NEW: DYNAMIC RSI SWING TRADE SCANNER ---
+    print("\n🔍 Scanning market for Short-Term RSI Swing Opportunities...")
+    latest_data = full_market_df.drop_duplicates(subset=['ticker'], keep='last')
+    
+    # Check if rsi_14 exists safely
+    if 'rsi_14' in latest_data.columns:
+        # Filter for heavily oversold (RSI < 30) or approaching (RSI < 35)
+        oversold_df = latest_data[latest_data['rsi_14'] < 35].sort_values(by='rsi_14')
+        
+        dynamic_watchlist = []
+        for _, row in oversold_df.iterrows():
+            ticker = row['ticker']
+            rsi = row['rsi_14']
+            close = row['close']
+            
+            if rsi <= 30:
+                note = f"🚨 OVERSOLD (RSI: {rsi:.1f}). Prime candidate for mean-reversion bounce. Current Price: KES {close:.2f}."
+            else:
+                note = f"⚠️ APPROACHING OVERSOLD (RSI: {rsi:.1f}). Watch for entry if it dips further. Current Price: KES {close:.2f}."
+                
+            dynamic_watchlist.append({"ticker": ticker, "note": note})
     else:
-        print("😴 No Golden Cross buy signals triggered today.")
-    print("=" * 60)
+        dynamic_watchlist = []
+        
+    # Fallback if the whole market is overbought/neutral
+    if not dynamic_watchlist:
+        dynamic_watchlist.append({"ticker": "MARKET", "note": "No counters are currently in oversold (RSI < 35) territory. Preserve your cash."})
 
-    # --- 5. PERSONALIZED DISPATCH ---
+    # --- 5. ENRICH MARKET CONTEXT FOR THE EMAIL ---
+    rich_market_context = {
+        "primary_strategy": "Trend Following via Golden Cross (50-EMA > 200-EMA) backed by a 1.2x Volume Surge.",
+        "strategy_logic": "This strategy targets long-term wealth accumulation. True Golden Crosses are rare on the NSE. Holding cash is a valid, risk-free position while waiting for these high-tier setups.",
+        "meantime_advice": (
+            "MEANTIME STRATEGY (RSI SWING TRADING): We have automatically scanned the market for 'Oversold' conditions. "
+            "These counters below have an RSI approaching or below 30, meaning they have been heavily sold off and are statistically primed for a short-term bounce-back. "
+            "Allocate strictly 10-15% of your capital to these setups, buy the dip, and sell quickly once the RSI normalizes above 50."
+        ),
+        "closest_watch": dynamic_watchlist
+    }
+
     print("\n5️⃣ Dispatching personalized email notifications...")
     try:
         latest_prices = full_market_df.drop_duplicates(subset=['ticker'], keep='last').set_index('ticker')['close'].to_dict()
         health_stats = {
-            "status": "🟢 All Systems Operational",
+            "status": "🟢 Systems Operational & Data Synchronized",
             "api": "MyStocks Mobile EOD",
             "scan_time": datetime.now().strftime("%d-%b-%Y | %H:%M EAT"),
             "counters_checked": len(TRACKED_TICKERS),
-            "errors": 0
         }
 
         active_users = get_active_users()
@@ -96,15 +138,20 @@ def run_daily_trading_bot():
                 
             print(f"  -> Generating custom report for {username} ({user_email})...")
             
-            # Fetch this specific user's portfolio math
             real_portfolio = get_live_portfolio_summary(latest_prices, username=username)
             
             format_and_dispatch_signals(
                 signals=all_signals,
                 system_health=health_stats,
                 portfolio=real_portfolio,
-                recipient_email=user_email # Routes to the user's specific inbox
+                market_context=rich_market_context,
+                recipient_email=user_email
             )
+            
+        # Write the daily lock file ONLY after successful dispatches
+        with open(LOCK_FILE, "w") as f:
+            f.write(TODAY_STR)
+        print("🔒 Daily email lock engaged. Bot will rest until tomorrow.")
             
     except Exception as e:
         print(f"  -> ❌ Notification dispatch error: {e}")
