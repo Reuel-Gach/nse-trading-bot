@@ -54,8 +54,13 @@ def run_daily_trading_bot():
         if 'close_price' in history_df.columns:
             history_df['close'] = history_df['close'].combine_first(history_df.get('close_price'))
             history_df = history_df.drop(columns=['close_price'])
-        # Drop old indicators to ensure they are recalculated freshly with RSI
-        old_indicators = [c for c in ['ema_50', 'ema_200', 'vma_20', 'atr_14', 'rsi_14'] if c in history_df.columns]
+            
+        # Drop old indicators to ensure ALL new multi-strategy indicators are recalculated freshly
+        indicators_to_drop = [
+            'ema_20', 'ema_50', 'ema_200', 'vma_20', 'atr_14', 'rsi_14', 
+            'macd_line', 'macd_signal', 'sma_20', 'std_20', 'bb_upper', 'bb_lower', 'high_20'
+        ]
+        old_indicators = [c for c in indicators_to_drop if c in history_df.columns]
         history_df = history_df.drop(columns=old_indicators)
     else:
         history_df = pd.DataFrame()
@@ -63,7 +68,7 @@ def run_daily_trading_bot():
     combined_df = pd.concat([history_df, today_df], ignore_index=True)
     combined_df = combined_df.drop_duplicates(subset=['ticker', 'date'], keep='last').sort_values(by=['ticker', 'date'])
 
-    print("\n3️⃣ Computing technical indicators (50-EMA, 200-EMA, VMA, ATR, RSI)...")
+    print("\n3️⃣ Computing technical indicators (Multi-Strategy Engine)...")
     enriched_dfs = [enrich_data_with_indicators(group) for _, group in combined_df.groupby("ticker")]
     full_market_df = pd.concat(enriched_dfs, ignore_index=True)
 
@@ -76,7 +81,7 @@ def run_daily_trading_bot():
     sell_signals = [] 
     all_signals = buy_signals + sell_signals
 
-    # --- NEW: DYNAMIC RSI SWING TRADE SCANNER ---
+    # --- DYNAMIC RSI SWING TRADE SCANNER ---
     print("\n🔍 Scanning market for Short-Term RSI Swing Opportunities...")
     latest_data = full_market_df.drop_duplicates(subset=['ticker'], keep='last')
     
@@ -106,11 +111,11 @@ def run_daily_trading_bot():
 
     # --- 5. ENRICH MARKET CONTEXT FOR THE EMAIL ---
     rich_market_context = {
-        "primary_strategy": "Trend Following via Golden Cross (50-EMA > 200-EMA) backed by a 1.2x Volume Surge.",
-        "strategy_logic": "This strategy targets long-term wealth accumulation. True Golden Crosses are rare on the NSE. Holding cash is a valid, risk-free position while waiting for these high-tier setups.",
+        "primary_strategy": "Aggressive Multi-Factor Engine (MACD, Bollinger, Momentum Breakout, Silver & Golden Crosses).",
+        "strategy_logic": "The bot is hunting concurrently for early momentum ignition, volatility squeezes, and trend crossovers. Any single mathematical trigger will fire an alert so you never miss an early rally.",
         "meantime_advice": (
-            "MEANTIME STRATEGY (RSI SWING TRADING): We have automatically scanned the market for 'Oversold' conditions. "
-            "These counters below have an RSI approaching or below 30, meaning they have been heavily sold off and are statistically primed for a short-term bounce-back. "
+            "MEANTIME STRATEGY (RSI SWING TRADING): We continually scan the market for 'Oversold' conditions (RSI < 30). "
+            "These counters have been heavily sold off and are statistically primed for a short-term bounce-back. "
             "Allocate strictly 10-15% of your capital to these setups, buy the dip, and sell quickly once the RSI normalizes above 50."
         ),
         "closest_watch": dynamic_watchlist

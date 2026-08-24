@@ -1,87 +1,82 @@
 import pandas as pd
+from typing import List, Dict, Any
 
-def evaluate_active_positions(portfolio_df: pd.DataFrame, market_df: pd.DataFrame) -> list:
-    """
-    Phase A: Evaluates currently owned shares for Exits or Pyramiding (Scale-In).
-    """
-    signals = []
-    
-    if portfolio_df.empty:
-        return signals
-
-    for _, position in portfolio_df.iterrows():
-        ticker = position['ticker']
+def screen_market_for_entries(full_market_df: pd.DataFrame, owned_tickers: List[str] = None) -> List[Dict[str, Any]]:
+    if owned_tickers is None:
+        owned_tickers = []
         
-        # Get the latest two days of data for this specific ticker
-        stock_data = market_df[market_df['ticker'] == ticker].sort_values(by='date').tail(2)
-        if len(stock_data) < 2:
-            continue
-            
-        today = stock_data.iloc[-1]
-        yesterday = stock_data.iloc[-2]
-        
-        # 1. STOP LOSS CHECK (Capital Preservation)
-        if today['close'] < position['current_stop_loss']:
-            signals.append({
-                'ticker': ticker,
-                'action': 'SELL_STOP_LOSS',
-                'reason': f"Price ({today['close']}) dropped below Stop Loss ({position['current_stop_loss']})"
-            })
-            continue
-            
-        # 2. DEATH CROSS CHECK (Trend Reversal)
-        if today['ema_50'] < today['ema_200'] and yesterday['ema_50'] >= yesterday['ema_200']:
-            signals.append({
-                'ticker': ticker,
-                'action': 'SELL_DEATH_CROSS',
-                'reason': "50-EMA crossed below 200-EMA"
-            })
-            continue
-            
-        # 3. PYRAMID / SCALE-IN CHECK
-        profit_margin = (today['close'] - position['average_entry_price']) / position['average_entry_price']
-        if profit_margin >= 0.05 and today['volume'] > (1.2 * today['vma_20']):
-            if position['pyramid_level'] < 2:
-                signals.append({
-                    'ticker': ticker,
-                    'action': 'SCALE_IN',
-                    'reason': f"Profit at {profit_margin*100:.1f}% with volume confirmation.",
-                    'new_stop_loss': today['close'] - (2 * today['atr_14'])
-                })
-                
-    return signals
-
-
-def screen_market_for_entries(market_df: pd.DataFrame, owned_tickers: list) -> list:
-    """
-    Phase B: Screens the broader NSE market for new Golden Crosses.
-    Ignores tickers already owned.
-    """
-    signals = []
+    buy_signals = []
     
-    unowned_df = market_df[~market_df['ticker'].isin(owned_tickers)]
-    
-    for ticker, group in unowned_df.groupby('ticker'):
-        group = group.sort_values(by='date')
+    # Group by ticker so we can compare yesterday's indicators to today's
+    for ticker, group in full_market_df.groupby('ticker'):
+        # 1. Skip stocks you already own
+        if ticker in owned_tickers:
+            continue
+            
+        # 2. Skip market indices (tickers starting with '^')
+        if ticker.startswith('^'):
+            continue
+            
         if len(group) < 2:
             continue
             
         today = group.iloc[-1]
         yesterday = group.iloc[-2]
+        close = today['close']
         
-        # THE GOLDEN CROSS RULE
-        crossed_above = today['ema_50'] > today['ema_200'] and yesterday['ema_50'] <= yesterday['ema_200']
+        if pd.isna(close) or close <= 0:
+            continue
+
+        triggers = []
+        stop_losses = []
+
+        # Strategy 1: Momentum Breakout + Volume Filter
+        high_20 = today.get('high_20', float('inf'))
+        vma_20 = yesterday.get('vma_20', 0)
+        today_vol = today.get('volume', 0)
         
-        # VOLUME CONFIRMATION
-        volume_surge = today['volume'] > (1.2 * today['vma_20'])
-        
-        if crossed_above and volume_surge:
-            initial_stop_loss = today['close'] - (2 * today['atr_14'])
-            signals.append({
-                'ticker': ticker,
-                'action': 'INITIAL_BUY',
-                'reason': "Golden Cross confirmed with 1.2x Volume Surge",
-                'suggested_stop_loss': initial_stop_loss
-            })
+        if close > high_20 and yesterday['close'] <= yesterday.get('high_20', float('inf')):
+            if today_vol > vma_20:  # VOLUME VALIDATION: Must be higher than 20-day average
+                triggers.append("Momentum Breakout (High Volume)")
+                stop_losses.append(close * 0.92)
+
+        # Strategy 2: MACD Bullish Crossover
+        if (yesterday['macd_line'] <= yesterday['macd_signal']) and (today['macd_line'] > today['macd_signal']):
+            triggers.append("MACD Bullish Cross")
+            stop_losses.append(close * 0.92)
+
+        # Strategy 3: Bollinger Band Breakout
+        if (yesterday['close'] <= yesterday.get('bb_upper', 0)) and (close > today.get('bb_upper', 0)):
+            triggers.append("Bollinger Breakout")
+            stop_losses.append(today.get('sma_20', close * 0.90))
+
+        # Strategy 4: Silver Cross
+        if (yesterday['ema_20'] <= yesterday['ema_50']) and (today['ema_20'] > today['ema_50']):
+            triggers.append("Silver Cross (20/50 EMA)")
+            stop_losses.append(close * 0.90)
             
-    return signals
+        # Strategy 5: Golden Cross
+        if (yesterday['ema_50'] <= yesterday['ema_200']) and (today['ema_50'] > today['ema_200']):
+            triggers.append("Golden Cross (50/200 EMA)")
+            stop_losses.append(close * 0.85)
+
+        # --- SCORING ENGINE ---
+        # Only buy if at least 2 strategies agree (Confluence), OR if it's a massive Golden Cross
+        if len(triggers) >= 2 or "Golden Cross (50/200 EMA)" in triggers:
+            reason_str = " + ".join(triggers)
+            # Take the tightest stop loss to protect capital
+            suggested_sl = max(stop_losses) if stop_losses else close * 0.90
+            
+            buy_signals.append({
+                "ticker": ticker, 
+                "action": "BUY", 
+                "price": close,
+                "reason": f"High-Conviction Setup: {reason_str}",
+                "suggested_stop_loss": suggested_sl
+            })
+
+    return buy_signals
+
+def evaluate_active_positions(full_market_df: pd.DataFrame, portfolio: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    # Placeholder for sell logic
+    return []
