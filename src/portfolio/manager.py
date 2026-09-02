@@ -1,148 +1,120 @@
 import sqlite3
 import os
-from typing import Dict, Any, List
+from typing import List, Dict, Any
 
-# Locate root directory (two levels up from src/portfolio/)
+# Map the path to Django's true unified database file
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-DB_PATH = os.path.join(ROOT_DIR, "market_data.sqlite")
+DB_PATH = os.path.join(ROOT_DIR, "web_dashboard", "nse-bot-db")
 
-def get_db_connection() -> sqlite3.Connection:
+def get_db_connection():
+    """Establishes a connection to the Django SQLite database."""
+    if not os.path.exists(DB_PATH):
+        raise FileNotFoundError(f"Django database not found at {DB_PATH}. Please run migrations first.")
+    
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
-def init_portfolio_db() -> None:
+def get_active_users() -> List[str]:
+    """
+    Fetches all usernames from Django's auth_user table 
+    who have an initialized frontend_account.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS account (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            available_cash REAL NOT NULL DEFAULT 0.0
-        )
-    """)
+    cursor.execute('''
+        SELECT u.username 
+        FROM auth_user u
+        JOIN frontend_account a ON u.id = a.user_id
+    ''')
     
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS portfolio (
-            position_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL DEFAULT 'reuel',
-            ticker TEXT NOT NULL,
-            entry_price REAL NOT NULL,
-            current_stop_loss REAL NOT NULL,
-            shares INTEGER NOT NULL,
-            pyramid_level INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'OPEN'
-        )
-    """)
-    
-    try:
-        cursor.execute("ALTER TABLE portfolio ADD COLUMN username TEXT DEFAULT 'reuel'")
-    except sqlite3.OperationalError:
-        pass  
-        
-    conn.commit()
+    users = [row['username'] for row in cursor.fetchall()]
     conn.close()
+    
+    return users
 
-def set_cash_balance(username: str, amount: float) -> None:
-    init_portfolio_db()
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO account (username, available_cash)
-        VALUES (?, ?)
-        ON CONFLICT(username) DO UPDATE SET available_cash = excluded.available_cash
-    """, (username, amount))
-    conn.commit()
-    conn.close()
-    print(f"💰 Cash balance for '{username}' set to KES {amount:,.2f}")
-
-def add_position(username: str, ticker: str, entry_price: float, shares: int, stop_loss: float) -> None:
-    init_portfolio_db()
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO portfolio (username, ticker, entry_price, current_stop_loss, shares, pyramid_level, status)
-        VALUES (?, ?, ?, ?, ?, 0, 'OPEN')
-    """, (username, ticker, entry_price, stop_loss, shares))
-    conn.commit()
-    conn.close()
-    print(f"📈 Added [{username}]: {shares} shares of {ticker} @ KES {entry_price:.2f} (Stop Loss: KES {stop_loss:.2f})")
-
-def get_live_portfolio_summary(latest_prices_dict: Dict[str, float], username: str = "reuel") -> Dict[str, Any]:
-    init_portfolio_db()
+def get_user_email(username: str) -> str:
+    """Fetches the registered email for a specific Django user."""
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    cursor.execute("SELECT available_cash FROM account WHERE username = ?", (username,))
-    cash_row = cursor.fetchone()
-    cash = cash_row["available_cash"] if cash_row else 0.0
+    cursor.execute('SELECT email FROM auth_user WHERE username = ?', (username,))
+    row = cursor.fetchone()
+    conn.close()
     
-    cursor.execute("SELECT * FROM portfolio WHERE username = ? AND status != 'CLOSED'", (username,))
+    return row['email'] if row else None
+
+def get_live_portfolio_summary(latest_prices: Dict[str, float], username: str) -> Dict[str, Any]:
+    """
+    Calculates the live equity and PnL for a user by combining their 
+    Django cash balance with their open Django portfolio positions.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # 1. Get the User ID and Available Cash
+    cursor.execute('''
+        SELECT u.id, a.available_cash 
+        FROM auth_user u
+        JOIN frontend_account a ON u.id = a.user_id
+        WHERE u.username = ?
+    ''', (username,))
+    
+    user_data = cursor.fetchone()
+    
+    # Fail-safe if the user exists but has no account yet
+    if not user_data:
+        conn.close()
+        return {
+            "total_equity": 0.0, "cash": 0.0, "daily_change_pct": 0.0, 
+            "open_positions": [], "username": username
+        }
+
+    user_id = user_data['id']
+    cash = user_data['available_cash']
+
+    # 2. Get Open Positions for this specific user
+    cursor.execute('''
+        SELECT ticker, shares, entry_price 
+        FROM frontend_portfolioposition 
+        WHERE user_id = ? AND status = 'OPEN'
+    ''', (user_id,))
+    
     positions = cursor.fetchall()
     conn.close()
-    
-    open_positions: List[Dict[str, Any]] = []
-    total_holdings_value = 0.0
-    
+
+    # 3. Calculate Live Portfolio Math
+    open_positions = []
+    positions_value = 0.0
+
     for pos in positions:
-        ticker = pos["ticker"]
-        shares = pos["shares"]
-        entry = pos["entry_price"]
+        ticker = pos['ticker']
+        shares = pos['shares']
+        entry = pos['entry_price']
         
-        current_price = latest_prices_dict.get(ticker, entry)
-        position_value = current_price * shares
-        pnl_val = position_value - (entry * shares)
+        # Match with today's live scraped price, fallback to entry if missing
+        current_price = latest_prices.get(ticker, entry)
         
-        total_holdings_value += position_value
+        pnl_val = (current_price - entry) * shares
+        pos_total_val = current_price * shares
+        
+        positions_value += pos_total_val
         
         open_positions.append({
             "ticker": ticker,
             "shares": shares,
             "entry": entry,
             "current": current_price,
-            "pnl_val": pnl_val,
-            "stop_loss": pos["current_stop_loss"],
-            "status": pos["status"]
+            "pnl_val": pnl_val
         })
-        
-    total_equity = cash + total_holdings_value
-    
+
+    total_equity = cash + positions_value
+
     return {
-        "username": username,
         "total_equity": total_equity,
         "cash": cash,
-        "daily_change_pct": 0.0,
-        "open_positions": open_positions
+        "daily_change_pct": 0.0, 
+        "open_positions": open_positions,
+        "username": username
     }
-
-# --- NEW HELPER FUNCTIONS FOR PERSONALIZED EMAILS ---
-
-def get_active_users() -> List[str]:
-    """Returns a list of usernames that have active positions in the bot DB."""
-    init_portfolio_db()
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT DISTINCT username FROM portfolio WHERE status != 'CLOSED'")
-    users = [row["username"] for row in cursor.fetchall()]
-    conn.close()
-    return users
-
-def get_user_email(username: str) -> str:
-    """Fetches the user's registered email address directly from Django's database."""
-    django_db_path = os.path.join(ROOT_DIR, "web_dashboard", "db.sqlite3")
-    if not os.path.exists(django_db_path):
-        return None
-        
-    try:
-        conn = sqlite3.connect(django_db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        # Query Django's built-in auth_user table
-        cursor.execute("SELECT email FROM auth_user WHERE username = ?", (username,))
-        row = cursor.fetchone()
-        conn.close()
-        return row["email"] if row else None
-    except sqlite3.Error as e:
-        print(f"DB Error fetching email: {e}")
-        return None

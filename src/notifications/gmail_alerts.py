@@ -7,7 +7,8 @@ from datetime import datetime
 
 try:
     from dotenv import load_dotenv, find_dotenv
-    load_dotenv(find_dotenv())
+    # Force reload to ensure it grabs the latest .env if cached
+    load_dotenv(find_dotenv(), override=True)
 except ImportError:
     pass
 
@@ -18,6 +19,8 @@ def format_and_dispatch_signals(
     market_context: Dict[str, Any] = None,
     recipient_email: str = None
 ):
+    print("\n--- 📧 EMAIL DISPATCH INITIATED ---")
+    
     sender_email = os.environ.get("GMAIL_SENDER")
     sender_password = os.environ.get("GMAIL_PASSWORD")
     
@@ -25,10 +28,18 @@ def format_and_dispatch_signals(
         recipient_list = [recipient_email]
     else:
         recipients_env = os.environ.get("GMAIL_RECIPIENTS") or os.environ.get("GMAIL_RECIPIENT", "")
+        recipients_env = recipients_env.replace('"', '').replace("'", "")
         recipient_list = [email.strip() for email in recipients_env.split(",") if email.strip()]
 
-    if not all([sender_email, sender_password, recipient_list]):
-        print("⚠️ Gmail credentials missing. Skipping email notification.")
+    print(f"Sender Loaded: {sender_email}")
+    print(f"Recipients Loaded: {recipient_list}")
+    
+    if not sender_email or not sender_password:
+        print("❌ ERROR: Missing GMAIL_SENDER or GMAIL_PASSWORD in environment.")
+        return
+        
+    if not recipient_list:
+        print("❌ ERROR: No recipients found in environment.")
         return
 
     now_eat = datetime.now().strftime("%d-%b-%Y")
@@ -37,15 +48,10 @@ def format_and_dispatch_signals(
     mkt = market_context or {}
 
     equity_str = f"Ksh {port['total_equity']:,.0f}"
-
-    if signals:
-        subject = f"🚨 NSE Alert: Action Required | Equity: {equity_str}"
-    else:
-        subject = f"📊 NSE Daily Update | Equity: {equity_str}"
+    subject = f"🚨 NSE Alert: Action Required | Equity: {equity_str}" if signals else f"📊 NSE Daily Update | Equity: {equity_str}"
 
     username = port.get('username', 'Trader').capitalize()
     
-    # --- SLEEK EMAIL CONSTRUCTION ---
     email_body = f"Hello {username},\n\n"
     email_body += f"Here is your daily NSE portfolio update for {now_eat}.\n\n"
     
@@ -93,24 +99,35 @@ def format_and_dispatch_signals(
     email_body += "⚙️ SYSTEM STATUS\n"
     email_body += "-" * 40 + "\n"
     email_body += f"🟢 Scanned {health.get('counters_checked', 31)} tickers successfully.\n\n"
-    
     email_body += "Automated by Reuel & Banice's NSE Trading Bot"
 
-    msg = MIMEMultipart()
-    msg['From'] = f"NSE Trading Bot <{sender_email}>"
-    msg['To'] = ", ".join(recipient_list)
-    msg['Subject'] = subject
-    msg.attach(MIMEText(email_body, 'plain'))
-
+    print("Connecting to SMTP Server (smtp.gmail.com:587)...")
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(sender_email, sender_password)
-        server.sendmail(sender_email, recipient_list, msg.as_string())
+        print("✅ SMTP Login Successful!")
+        
+        for recipient in recipient_list:
+            msg = MIMEMultipart()
+            msg['From'] = f"NSE Trading Bot <{sender_email}>"
+            msg['To'] = recipient
+            msg['Subject'] = subject
+            msg.attach(MIMEText(email_body, 'plain'))
+            
+            try:
+                server.sendmail(sender_email, recipient, msg.as_string())
+                print(f"✅ Dispatch complete: Email sent to {recipient}")
+            except Exception as e:
+                print(f"❌ Dispatch failed for {recipient}: {e}")
+                
+    except smtplib.SMTPAuthenticationError:
+        print("❌ SMTP ERROR: Authentication failed. Your App Password may have been revoked or typed incorrectly.")
     except Exception as e:
-        print(f"❌ Failed to send email to {recipient_email}: {e}")
+        print(f"❌ SMTP ERROR: Connection Failed: {e}")
     finally:
         try:
             server.quit()
         except:
             pass
+    print("---------------------------------------\n")

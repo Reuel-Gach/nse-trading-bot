@@ -1,0 +1,304 @@
+{% extends 'frontend/base.html' %}
+
+{% block title %}Dashboard | NSE Engine{% endblock %}
+
+{% block content %}
+<!-- Header & Action Trigger -->
+<div class="flex justify-between items-end mb-8 border-b border-dark-700 pb-4">
+    <div>
+        <h2 class="text-3xl font-bold text-white tracking-wide">Active Operations</h2>
+        <p class="text-sm text-gray-500 mt-1 uppercase tracking-widest font-mono">Real-time valuation & ledger</p>
+    </div>
+    <button onclick="openAddModal()" 
+            class="text-sm bg-gold text-black font-bold px-6 py-2.5 rounded hover:bg-gold-light transition-all shadow-[0_0_15px_rgba(212,175,55,0.3)]">
+        + Execute Trade
+    </button>
+</div>
+
+<!-- Master Portfolio Summary Card -->
+<div class="bg-dark-800 border border-dark-700 rounded-xl p-8 mb-8 shadow-2xl relative overflow-hidden">
+    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-gold to-transparent opacity-50"></div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center divide-y md:divide-y-0 md:divide-x divide-dark-700">
+        <div class="pt-4 md:pt-0">
+            <p class="text-xs text-gray-500 uppercase tracking-widest mb-2">Total Invested Value</p>
+            <p class="text-2xl font-mono text-white">
+                <span class="text-gray-500 text-lg">KES</span> {{ total_invested|floatformat:2 }}
+            </p>
+        </div>
+        
+        <div class="pt-4 md:pt-0">
+            <p class="text-xs text-gray-500 uppercase tracking-widest mb-2">Current Valuation</p>
+            <p class="text-2xl font-mono text-gold">
+                <span class="text-gray-500 text-lg">KES</span> {{ current_value|floatformat:2 }}
+            </p>
+        </div>
+        
+        <div class="pt-4 md:pt-0">
+            <p class="text-xs text-gray-500 uppercase tracking-widest mb-2">Open P&L</p>
+            <p class="text-2xl font-mono font-bold {% if net_gain >= 0 %}text-green-500{% else %}text-red-500{% endif %}">
+                {% if net_gain > 0 %}+{% endif %}{{ net_gain|floatformat:2 }} 
+                <span class="text-lg opacity-80">({{ net_gain_pct|floatformat:2 }}%)</span>
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Holdings Data Table -->
+<div class="bg-dark-800 border border-dark-700 rounded-xl overflow-hidden shadow-lg mb-12">
+    <table class="w-full text-right">
+        <thead>
+            <tr class="bg-dark-950/50 text-[10px] uppercase tracking-widest text-gray-500 border-b border-dark-700">
+                <th class="py-4 px-6 text-left font-normal">Security<br><span class="text-dark-700">|</span> Quantity</th>
+                <th class="py-4 px-6 font-normal">Avg Price<br><span class="text-dark-700">|</span> Inv Value</th>
+                <th class="py-4 px-6 font-normal">LTP<br><span class="text-dark-700">|</span> Current Value</th>
+                <th class="py-4 px-6 font-normal">P&L Value<br><span class="text-dark-700">|</span> Actions</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-dark-700 text-sm">
+            {% for pos in portfolio %}
+            <tr class="hover:bg-dark-700/30 transition-colors">
+                <td class="py-4 px-6 text-left">
+                    <div class="font-bold text-gold text-lg tracking-wider">{{ pos.ticker }}</div>
+                    <div class="text-gray-500 font-mono text-xs mt-1">{{ pos.shares }} Shares</div>
+                </td>
+                
+                <td class="py-4 px-6 font-mono">
+                    <div class="text-white">{{ pos.entry_price|floatformat:2 }}</div>
+                    <div class="text-gray-500 text-xs mt-1">{{ pos.invested_value|floatformat:2 }}</div>
+                </td>
+                
+                <td class="py-4 px-6 font-mono">
+                    <div class="font-bold flex justify-end items-center gap-2 {% if pos.current_price >= pos.entry_price %}text-green-500{% else %}text-red-500{% endif %}">
+                        {{ pos.current_price|floatformat:2 }}
+                    </div>
+                    <div class="text-gray-500 text-xs mt-1">{{ pos.current_value|floatformat:2 }}</div>
+                </td>
+                
+                <td class="py-4 px-6 font-mono">
+                    <div class="flex justify-end items-center gap-2">
+                        {% if pos.status == 'PENDING' %}
+                            <form action="{% url 'update_position_status' pos.id %}" method="POST" class="inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="confirm">
+                                <button type="submit" class="bg-green-900/40 hover:bg-green-700 text-green-300 border border-green-600 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition">Confirm</button>
+                            </form>
+                        {% else %}
+                            <button type="button" onclick="openCloseModal('{{ pos.id }}', '{{ pos.ticker }}', '{{ pos.current_price }}')" 
+                                    class="bg-yellow-900/40 hover:bg-yellow-700 text-yellow-300 border border-yellow-600 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition">Close</button>
+                        {% endif %}
+                        
+                        <button type="button" onclick="openEditModal('{{ pos.id }}', '{{ pos.ticker }}', '{{ pos.shares }}', '{{ pos.entry_price }}', '{{ pos.current_stop_loss|default:0 }}', '{{ pos.status }}')" 
+                                class="bg-blue-900/40 hover:bg-blue-700 text-blue-300 border border-blue-600 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition">Edit</button>
+
+                        <form action="{% url 'delete_position' pos.id %}" method="POST" class="inline" onsubmit="return confirm('Permanently delete this position?');">
+                            {% csrf_token %}
+                            <button type="submit" class="bg-red-900/40 hover:bg-red-700 text-red-300 border border-red-600 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition">Delete</button>
+                        </form>
+                    </div>
+
+                    {% if pos.status == 'PENDING' %}
+                        <div class="mt-1 text-right">
+                            <span class="bg-yellow-900/30 border border-yellow-700/50 text-yellow-500 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider inline-block">Pending Order</span>
+                        </div>
+                    {% else %}
+                        <div class="font-bold {% if pos.pnl_value >= 0 %}text-green-500{% else %}text-red-500{% endif %} mt-1">
+                            {% if pos.pnl_value > 0 %}+{% endif %}{{ pos.pnl_value|floatformat:2 }}
+                        </div>
+                        <div class="text-gray-500 text-xs mt-0.5">{% if pos.pnl_percent > 0 %}+{% endif %}{{ pos.pnl_percent|floatformat:2 }}%</div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4" class="py-12 text-center text-gray-600 font-mono text-sm uppercase tracking-widest border-t border-dark-700">
+                    No active positions initialized in ledger.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- DYNAMIC TRADE MODAL -->
+<div id="tradeModal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm transition-opacity">
+    <div class="bg-dark-800 rounded-xl p-6 w-full max-w-lg border border-gold/30 shadow-[0_0_30px_rgba(0,0,0,0.8)] max-h-[90vh] overflow-y-auto">
+        
+        <div class="flex justify-between items-center mb-6 border-b border-dark-700 pb-3">
+            <div>
+                <h2 id="modalTitle" class="text-xl font-bold text-gold tracking-widest uppercase">Log Entry</h2>
+                <p class="text-[10px] text-gray-400 font-mono">Risk Management Engine</p>
+            </div>
+            <button onclick="document.getElementById('tradeModal').classList.add('hidden')" class="text-gray-500 hover:text-gold text-2xl font-bold">&times;</button>
+        </div>
+        
+        <form id="tradeForm" action="{% url 'add_position' %}" method="POST">
+            {% csrf_token %}
+            
+            <div class="mb-4">
+                <label class="block text-gray-400 text-xs font-bold mb-2 uppercase tracking-wider">Ticker Symbol</label>
+                <input type="text" id="calc_ticker" name="ticker" placeholder="e.g. SCOM" required class="w-full bg-dark-900 text-white border border-dark-700 rounded py-2 px-3 focus:outline-none focus:border-gold uppercase text-sm font-mono">
+            </div>
+            
+            <div class="flex gap-4 mb-4">
+                <div class="w-1/2">
+                    <label class="block text-gray-400 text-xs font-bold mb-2 uppercase tracking-wider">Avg Price (KES)</label>
+                    <input type="number" step="0.01" id="calc_entry" name="entry_price" required placeholder="0.00" oninput="calculateRisk()" class="w-full bg-dark-900 text-white border border-dark-700 rounded py-2 px-3 focus:outline-none focus:border-gold text-sm font-mono">
+                </div>
+                <div class="w-1/2">
+                    <label class="block text-gray-400 text-xs font-bold mb-2 uppercase tracking-wider">Stop Loss (KES)</label>
+                    <input type="number" step="0.01" id="calc_stop" name="stop_loss" required placeholder="0.00" oninput="calculateRisk()" class="w-full bg-dark-900 text-white border border-dark-700 rounded py-2 px-3 focus:outline-none focus:border-gold text-sm font-mono">
+                </div>
+            </div>
+
+            <!-- New Logic: Trade Capital and Max Accepted Loss -->
+            <div class="flex gap-4 mb-4">
+                <div class="w-1/2">
+                    <label class="block text-gray-400 text-xs font-bold mb-2 uppercase tracking-wider">Trade Capital</label>
+                    <input type="number" step="0.01" id="calc_equity" placeholder="e.g. 15000" oninput="calculateRisk()" class="w-full bg-dark-900 text-white border border-dark-700 rounded py-2 px-3 focus:outline-none focus:border-gold text-sm font-mono">
+                </div>
+                <div class="w-1/2">
+                    <label class="block text-gray-400 text-xs font-bold mb-2 uppercase tracking-wider">Max Cash Risk</label>
+                    <input type="number" step="0.01" id="calc_max_risk" placeholder="e.g. 1000" oninput="calculateRisk()" class="w-full bg-dark-900 text-red-400 border border-dark-700 rounded py-2 px-3 focus:outline-none focus:border-red-500 text-sm font-mono font-bold">
+                </div>
+            </div>
+
+            <div class="bg-dark-950 border border-dark-700 rounded-lg p-4 mb-4 font-mono text-xs space-y-2">
+                <div class="flex justify-between">
+                    <span class="text-gray-500">Risk Per Share:</span>
+                    <span id="out_risk_per_share" class="text-white">KES 0.00</span>
+                </div>
+                <div class="flex justify-between border-t border-dark-700 pt-2 font-bold">
+                    <span class="text-gold">Rec. Shares:</span>
+                    <span id="out_rec_shares" class="text-gold text-sm">0 Units</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500">Actual Required Cap:</span>
+                    <span id="out_total_exposure" class="text-gray-300">KES 0.00</span>
+                </div>
+            </div>
+
+            <div class="flex gap-4 mb-6">
+                <div class="w-1/2">
+                    <label class="block text-gray-400 text-xs font-bold mb-2 uppercase tracking-wider">Shares to Buy</label>
+                    <input type="number" id="calc_shares" name="shares" required placeholder="Auto" class="w-full bg-dark-900 text-white border border-gold rounded py-2 px-3 focus:outline-none text-sm font-mono font-bold">
+                </div>
+                <div class="w-1/2">
+                    <label class="block text-gray-400 text-xs font-bold mb-2 uppercase tracking-wider">Status</label>
+                    <select id="calc_status" name="status" class="w-full bg-dark-900 text-white border border-dark-700 rounded py-2 px-3 focus:outline-none focus:border-gold text-sm font-mono">
+                        <option value="OPEN">Active</option>
+                        <option value="PENDING">Pending</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex justify-end">
+                <button type="submit" id="modalSubmitBtn" class="w-full text-sm text-black bg-gold font-bold py-3 px-4 rounded hover:bg-gold-light transition duration-200 uppercase tracking-widest shadow-lg">
+                    Commit to Database
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- CLOSE POSITION MODAL -->
+<div id="closeModal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm transition-opacity">
+    <div class="bg-dark-800 rounded-xl p-6 w-full max-w-md border border-gold/30 shadow-[0_0_30px_rgba(0,0,0,0.8)]">
+        <div class="flex justify-between items-center mb-6 border-b border-dark-700 pb-3">
+            <h2 id="closeModalTitle" class="text-xl font-bold text-gold tracking-widest uppercase">Close Position</h2>
+            <button onclick="document.getElementById('closeModal').classList.add('hidden')" class="text-gray-500 hover:text-gold text-2xl font-bold">&times;</button>
+        </div>
+        
+        <form id="closeForm" method="POST">
+            {% csrf_token %}
+            <div class="mb-4">
+                <label class="block text-gray-400 text-xs font-bold mb-2 uppercase tracking-wider">Exit Price (KES)</label>
+                <input type="number" step="0.01" id="exit_price" name="exit_price" required class="w-full bg-dark-900 text-white border border-dark-700 rounded py-2 px-3 focus:outline-none focus:border-gold text-sm font-mono">
+            </div>
+            <div class="mb-6">
+                <label class="block text-gray-400 text-xs font-bold mb-2 uppercase tracking-wider">Exit Reason</label>
+                <select name="exit_reason" class="w-full bg-dark-900 text-white border border-dark-700 rounded py-2 px-3 focus:outline-none focus:border-gold text-sm font-mono">
+                    <option value="Manual Exit">Manual Exit</option>
+                    <option value="Stop Loss Hit">Stop Loss Hit</option>
+                    <option value="Take Profit Target Hit">Take Profit Target Hit</option>
+                </select>
+            </div>
+            <button type="submit" class="w-full bg-gold text-black font-bold py-3 rounded hover:bg-gold-light transition uppercase tracking-widest text-sm shadow-lg">
+                Confirm & Move to Journal
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    function calculateRisk() {
+        const entry = parseFloat(document.getElementById('calc_entry').value) || 0;
+        const stop = parseFloat(document.getElementById('calc_stop').value) || 0;
+        const capital = parseFloat(document.getElementById('calc_equity').value) || 0;
+        const maxRisk = parseFloat(document.getElementById('calc_max_risk').value) || 0;
+
+        const outRiskPerShare = document.getElementById('out_risk_per_share');
+        const outRecShares = document.getElementById('out_rec_shares');
+        const outTotalExposure = document.getElementById('out_total_exposure');
+        const inputShares = document.getElementById('calc_shares');
+
+        if (entry > 0 && stop > 0 && entry > stop && capital > 0 && maxRisk > 0) {
+            const riskPerShare = entry - stop;
+            
+            // Calc max shares allowed by risk constraint
+            const riskShares = Math.floor(maxRisk / riskPerShare);
+            // Calc max shares allowed by capital constraint
+            const capShares = Math.floor(capital / entry);
+            
+            // The recommended size is the smaller of the two to satisfy both rules
+            const recShares = Math.min(riskShares, capShares);
+            const totalExposure = recShares * entry;
+
+            outRiskPerShare.innerText = `KES ${riskPerShare.toFixed(2)}`;
+            outRecShares.innerText = `${recShares.toLocaleString()} Units`;
+            outTotalExposure.innerText = `KES ${totalExposure.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+            inputShares.value = recShares;
+        } else {
+            outRiskPerShare.innerText = 'KES 0.00';
+            outRecShares.innerText = '0 Units';
+            outTotalExposure.innerText = 'KES 0.00';
+        }
+    }
+
+    function openAddModal() {
+        const form = document.getElementById('tradeForm');
+        form.action = "{% url 'add_position' %}";
+        form.reset();
+        document.getElementById('modalTitle').innerText = "Log Entry";
+        document.getElementById('modalSubmitBtn').innerText = "Commit to Database";
+        document.getElementById('tradeModal').classList.remove('hidden');
+    }
+
+    function openEditModal(id, ticker, shares, entryPrice, stopLoss, status) {
+        const form = document.getElementById('tradeForm');
+        form.action = `/edit-position/${id}/`;
+        
+        document.getElementById('calc_ticker').value = ticker;
+        document.getElementById('calc_shares').value = shares;
+        document.getElementById('calc_entry').value = entryPrice;
+        document.getElementById('calc_stop').value = stopLoss;
+        document.getElementById('calc_status').value = status;
+        
+        document.getElementById('modalTitle').innerText = `Edit Position: ${ticker}`;
+        document.getElementById('modalSubmitBtn').innerText = "Update Position";
+        
+        document.getElementById('tradeModal').classList.remove('hidden');
+    }
+
+    function openCloseModal(id, ticker, currentPrice) {
+        const form = document.getElementById('closeForm');
+        form.action = `/close-position/${id}/`;
+        document.getElementById('closeModalTitle').innerText = `Close Position: ${ticker}`;
+        document.getElementById('exit_price').value = currentPrice;
+        document.getElementById('closeModal').classList.remove('hidden');
+    }
+</script>
+{% endblock %}
