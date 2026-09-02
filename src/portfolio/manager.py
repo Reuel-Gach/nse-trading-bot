@@ -48,14 +48,14 @@ def get_user_email(username: str) -> str:
 def get_live_portfolio_summary(latest_prices: Dict[str, float], username: str) -> Dict[str, Any]:
     """
     Calculates the live equity and PnL for a user by combining their 
-    Django cash balance with their open Django portfolio positions.
+    open Django portfolio positions and total realized profit.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # 1. Get the User ID and Available Cash
+    # 1. Get the User ID and Realized Profit (removed available_cash)
     cursor.execute('''
-        SELECT u.id, a.available_cash 
+        SELECT u.id, a.total_realized_profit 
         FROM auth_user u
         JOIN frontend_account a ON u.id = a.user_id
         WHERE u.username = ?
@@ -67,12 +67,16 @@ def get_live_portfolio_summary(latest_prices: Dict[str, float], username: str) -
     if not user_data:
         conn.close()
         return {
-            "total_equity": 0.0, "cash": 0.0, "daily_change_pct": 0.0, 
-            "open_positions": [], "username": username
+            "total_equity": 0.0, 
+            "cash": 0.0, 
+            "realized_profit": 0.0,
+            "daily_change_pct": 0.0, 
+            "open_positions": [], 
+            "username": username
         }
 
     user_id = user_data['id']
-    cash = user_data['available_cash']
+    realized_profit = user_data['total_realized_profit']
 
     # 2. Get Open Positions for this specific user
     cursor.execute('''
@@ -109,11 +113,13 @@ def get_live_portfolio_summary(latest_prices: Dict[str, float], username: str) -
             "pnl_val": pnl_val
         })
 
-    total_equity = cash + positions_value
+    # Total equity is now strictly the value of active investments
+    total_equity = positions_value
 
     return {
         "total_equity": total_equity,
-        "cash": cash,
+        "cash": 0.0, # Maintained at 0.0 so downstream email templates don't crash
+        "realized_profit": realized_profit,
         "daily_change_pct": 0.0, 
         "open_positions": open_positions,
         "username": username

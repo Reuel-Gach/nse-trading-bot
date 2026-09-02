@@ -1,4 +1,5 @@
 import os
+import json
 import sys
 import pandas as pd
 from datetime import datetime
@@ -11,8 +12,8 @@ if ROOT_DIR not in sys.path:
 
 from src.ingestion.scraper import scrape_mystocks_mobile
 from src.strategy.indicators import enrich_data_with_indicators
-from src.strategy.evaluator import screen_market_for_entries, evaluate_active_positions
-from src.notifications.gmail_alerts import format_and_dispatch_signals
+from src.strategy.evaluator import screen_market_for_entries
+from src.notifications.gmail_alerts import format_and_dispatch_signals, dispatch_eod_summary_report
 from src.portfolio.manager import get_live_portfolio_summary, get_active_users, get_user_email
 
 TRACKED_TICKERS = [
@@ -23,39 +24,77 @@ TRACKED_TICKERS = [
 ]
 
 HISTORY_FILE = os.path.join(ROOT_DIR, "data", "nse_historical_data.csv")
-LOCK_FILE = os.path.join(ROOT_DIR, "logs", "last_email_date.txt")
+SIGNALS_JSON_FILE = os.path.join(ROOT_DIR, "data", "market_signals.json")
 
-def run_daily_trading_bot():
-    print("=" * 60)
-    print(f"🚀 NSE TRADING BOT — DAILY RUN ({datetime.today().strftime('%Y-%m-%d %H:%M:%S')})")
-    print("=" * 60)
-
-    # --- 0. CHECK FOR DAILY EMAIL LOCK ---
-    TODAY_STR = datetime.now().strftime('%Y-%m-%d')
-    os.makedirs(os.path.join(ROOT_DIR, "logs"), exist_ok=True)
+def export_signals_for_dashboard(full_market_df, buy_signals):
+    """Updates market_signals.json continuously for the web dashboard."""
+    latest_df = full_market_df.drop_duplicates(subset=['ticker'], keep='last')
+    buy_dict = {s['ticker']: s for s in buy_signals}
     
-    if os.path.exists(LOCK_FILE):
-        with open(LOCK_FILE, "r") as f:
-            last_sent = f.read().strip()
-        if last_sent == TODAY_STR:
-            print(f"⏩ Market update already dispatched today ({TODAY_STR}).")
-            print("   Cron triggered, but skipping execution to prevent duplicate emails.")
-            return
+    radar_data = []
+    for _, row in latest_df.iterrows():
+        ticker = row['ticker']
+        if ticker.startswith('^'):
+            continue
+            
+        price = float(row['close']) if pd.notna(row['close']) else 0.0
+        rsi = float(row.get('rsi_14', 50.0)) if pd.notna(row.get('rsi_14')) else 50.0
+        
+        if ticker in buy_dict:
+            bs = buy_dict[ticker]
+            action = "STRONG BUY"
+            reason = bs.get('reason', 'Strategy Confluence Triggered')
+            confidence = 90.0
+            stop_loss = float(bs.get('suggested_stop_loss', price * 0.90))
+        elif rsi < 30:
+            action = "OVERSOLD"
+            reason = f"Oversold Bounce Candidate (RSI: {rsi:.1f})"
+            confidence = 75.0
+            stop_loss = price * 0.92
+        elif rsi > 70:
+            action = "STRONG SELL"
+            reason = f"Overbought Territory (RSI: {rsi:.1f})"
+            confidence = 80.0
+            stop_loss = price * 1.05
+        else:
+            action = "NEUTRAL"
+            reason = f"Consolidating (RSI: {rsi:.1f})"
+            confidence = 50.0
+            stop_loss = price * 0.90
+            
+        radar_data.append({
+            "ticker": ticker,
+            "price": round(price, 2),
+            "rsi": round(rsi, 1),
+            "action": action,
+            "reason": reason,
+            "confidence": confidence,
+            "suggested_stop_loss": round(stop_loss, 2)
+        })
+        
+    radar_data.sort(key=lambda x: (0 if "BUY" in x['action'] or x['action'] == "OVERSOLD" else 1, -x['confidence']))
+    
+    with open(SIGNALS_JSON_FILE, "w") as f:
+        json.dump(radar_data, f, indent=4)
+
+def run_trading_bot_cycle():
+    print("=" * 60)
+    print(f"🚀 NSE TRADING BOT — CYCLE RUN ({datetime.today().strftime('%Y-%m-%d %H:%M:%S')})")
+    print("=" * 60)
 
     print("\n1️⃣ Scraping EOD market prices from MyStocks...")
     today_df = scrape_mystocks_mobile(TRACKED_TICKERS)
     if today_df.empty or today_df['close'].isnull().all():
-        print("❌ Scraper failed to retrieve valid prices. Halting execution.")
+        print("❌ Scraper failed to retrieve valid prices. Skipping cycle.")
         return
 
-    print("\n2️⃣ Loading and harmonizing historical dataset...")
+    print("\n2️⃣ Harmonizing historical dataset...")
     if os.path.exists(HISTORY_FILE):
         history_df = pd.read_csv(HISTORY_FILE)
         if 'close_price' in history_df.columns:
             history_df['close'] = history_df['close'].combine_first(history_df.get('close_price'))
             history_df = history_df.drop(columns=['close_price'])
             
-        # Drop old indicators to ensure ALL new multi-strategy indicators are recalculated freshly
         indicators_to_drop = [
             'ema_20', 'ema_50', 'ema_200', 'vma_20', 'atr_14', 'rsi_14', 
             'macd_line', 'macd_signal', 'sma_20', 'std_20', 'bb_upper', 'bb_lower', 'high_20'
@@ -68,98 +107,105 @@ def run_daily_trading_bot():
     combined_df = pd.concat([history_df, today_df], ignore_index=True)
     combined_df = combined_df.drop_duplicates(subset=['ticker', 'date'], keep='last').sort_values(by=['ticker', 'date'])
 
-    print("\n3️⃣ Computing technical indicators (Multi-Strategy Engine)...")
+    print("\n3️⃣ Computing technical indicators...")
     enriched_dfs = [enrich_data_with_indicators(group) for _, group in combined_df.groupby("ticker")]
     full_market_df = pd.concat(enriched_dfs, ignore_index=True)
 
     os.makedirs(os.path.join(ROOT_DIR, "data"), exist_ok=True)
     full_market_df.to_csv(HISTORY_FILE, index=False)
-    print(f"  -> 💾 Saved clean enriched history ({len(full_market_df)} total rows).")
 
-    print("\n4️⃣ Evaluating trading strategy signals...")
+    print("\n4️⃣ Evaluating strategy signals...")
     buy_signals = screen_market_for_entries(full_market_df, owned_tickers=[])
-    sell_signals = [] 
-    all_signals = buy_signals + sell_signals
-
-    # --- DYNAMIC RSI SWING TRADE SCANNER ---
-    print("\n🔍 Scanning market for Short-Term RSI Swing Opportunities...")
-    latest_data = full_market_df.drop_duplicates(subset=['ticker'], keep='last')
     
-    # Check if rsi_14 exists safely
-    if 'rsi_14' in latest_data.columns:
-        # Filter for heavily oversold (RSI < 30) or approaching (RSI < 35)
-        oversold_df = latest_data[latest_data['rsi_14'] < 35].sort_values(by='rsi_14')
-        
-        dynamic_watchlist = []
-        for _, row in oversold_df.iterrows():
-            ticker = row['ticker']
-            rsi = row['rsi_14']
-            close = row['close']
-            
-            if rsi <= 30:
-                note = f"🚨 OVERSOLD (RSI: {rsi:.1f}). Prime candidate for mean-reversion bounce. Current Price: KES {close:.2f}."
-            else:
-                note = f"⚠️ APPROACHING OVERSOLD (RSI: {rsi:.1f}). Watch for entry if it dips further. Current Price: KES {close:.2f}."
-                
-            dynamic_watchlist.append({"ticker": ticker, "note": note})
-    else:
-        dynamic_watchlist = []
-        
-    # Fallback if the whole market is overbought/neutral
-    if not dynamic_watchlist:
-        dynamic_watchlist.append({"ticker": "MARKET", "note": "No counters are currently in oversold (RSI < 35) territory. Preserve your cash."})
+    # Always update web dashboard JSON
+    export_signals_for_dashboard(full_market_df, buy_signals)
 
-    # --- 5. ENRICH MARKET CONTEXT FOR THE EMAIL ---
-    rich_market_context = {
-        "primary_strategy": "Aggressive Multi-Factor Engine (MACD, Bollinger, Momentum Breakout, Silver & Golden Crosses).",
-        "strategy_logic": "The bot is hunting concurrently for early momentum ignition, volatility squeezes, and trend crossovers. Any single mathematical trigger will fire an alert so you never miss an early rally.",
-        "meantime_advice": (
-            "MEANTIME STRATEGY (RSI SWING TRADING): We continually scan the market for 'Oversold' conditions (RSI < 30). "
-            "These counters have been heavily sold off and are statistically primed for a short-term bounce-back. "
-            "Allocate strictly 10-15% of your capital to these setups, buy the dip, and sell quickly once the RSI normalizes above 50."
-        ),
-        "closest_watch": dynamic_watchlist
-    }
+    # Check current time to determine if it's End-of-Day (>= 15:00 EAT)
+    current_hour = datetime.now().hour
+    current_minute = datetime.now().minute
+    is_eod_time = (current_hour > 15) or (current_hour == 15 and current_minute >= 0)
 
-    print("\n5️⃣ Dispatching personalized email notifications...")
-    try:
+    LOGS_DIR = os.path.join(ROOT_DIR, "logs")
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    TODAY_STR = datetime.now().strftime('%Y-%m-%d')
+    
+    # --- END-OF-DAY (EOD) SUMMARY REPORT MODE ---
+    if is_eod_time:
+        EOD_LOCK_FILE = os.path.join(LOGS_DIR, f"eod_sent_{TODAY_STR}.txt")
+        if os.path.exists(EOD_LOCK_FILE):
+            print("⏩ EOD Summary Report already dispatched for today. Resting.")
+            return
+
+        print("\n🔔 Market Closed (15:00+ EAT). Generating End-of-Day Summary Report...")
         latest_prices = full_market_df.drop_duplicates(subset=['ticker'], keep='last').set_index('ticker')['close'].to_dict()
-        health_stats = {
-            "status": "🟢 Systems Operational & Data Synchronized",
-            "api": "MyStocks Mobile EOD",
-            "scan_time": datetime.now().strftime("%d-%b-%Y | %H:%M EAT"),
-            "counters_checked": len(TRACKED_TICKERS),
-        }
-
+        
         active_users = get_active_users()
-        if not active_users:
-            print("  -> No active users found with open portfolios.")
-            
         for username in active_users:
             user_email = get_user_email(username)
             if not user_email:
-                print(f"  -> ⚠️ No email found in Django DB for user '{username}'. Skipping.")
                 continue
-                
-            print(f"  -> Generating custom report for {username} ({user_email})...")
             
             real_portfolio = get_live_portfolio_summary(latest_prices, username=username)
             
-            format_and_dispatch_signals(
-                signals=all_signals,
-                system_health=health_stats,
+            # Call your EOD dispatcher function
+            dispatch_eod_summary_report(
+                recipient_email=user_email,
+                username=username,
                 portfolio=real_portfolio,
-                market_context=rich_market_context,
+                all_signals=buy_signals,
+                latest_prices=latest_prices
+            )
+
+        with open(EOD_LOCK_FILE, "w") as f:
+            f.write("SENT")
+        print("🔒 EOD Report lock engaged for today.")
+        return
+
+    # --- INTRADAY TACTICAL BUY ALERT MODE ---
+    TRACKER_FILE = os.path.join(LOGS_DIR, f"sent_alerts_{TODAY_STR}.json")
+    sent_today = []
+    if os.path.exists(TRACKER_FILE):
+        with open(TRACKER_FILE, "r") as f:
+            sent_today = json.load(f)
+
+    new_signals_to_email = [s for s in buy_signals if s['ticker'] not in sent_today]
+
+    if not new_signals_to_email:
+        print("  -> 🔕 No new tactical buy setups. Dashboard updated quietly.")
+        return
+
+    print(f"\n⚡ Dispatching Custom Tactical Buy Alerts for {len(new_signals_to_email)} asset(s)...")
+    try:
+        latest_prices = full_market_df.drop_duplicates(subset=['ticker'], keep='last').set_index('ticker')['close'].to_dict()
+        active_users = get_active_users()
+        
+        for username in active_users:
+            user_email = get_user_email(username)
+            if not user_email:
+                continue
+                
+            real_portfolio = get_live_portfolio_summary(latest_prices, username=username)
+            
+            # Custom formatter function call for individual buy signals
+            format_and_dispatch_signals(
+                signals=new_signals_to_email,
+                system_health={"status": "🟢 Intraday Live Feed Active", "scan_time": datetime.now().strftime("%d-%b-%Y | %H:%M EAT")},
+                portfolio=real_portfolio,
+                market_context={"primary_strategy": "Intraday Tactical Confluence Engine"},
                 recipient_email=user_email
             )
             
-        # Write the daily lock file ONLY after successful dispatches
-        with open(LOCK_FILE, "w") as f:
-            f.write(TODAY_STR)
-        print("🔒 Daily email lock engaged. Bot will rest until tomorrow.")
+        for sig in new_signals_to_email:
+            if sig['ticker'] not in sent_today:
+                sent_today.append(sig['ticker'])
+                
+        with open(TRACKER_FILE, "w") as f:
+            json.dump(sent_today, f)
+            
+        print("  -> ✅ Tactical alerts dispatched successfully.")
             
     except Exception as e:
         print(f"  -> ❌ Notification dispatch error: {e}")
 
 if __name__ == "__main__":
-    run_daily_trading_bot()
+    run_trading_bot_cycle()
