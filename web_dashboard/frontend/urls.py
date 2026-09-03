@@ -22,6 +22,8 @@ urlpatterns = [
     # Control Room & System Overrides
     path('control-room/', views.control_room, name='control_room'),
     path('control-room/refresh/', views.refresh_market_data, name='refresh_market_data'),
+    path('control-room/dispatch-eod/', views.dispatch_eod_manual, name='dispatch_eod_manual'),
+    path('control-room/clear-logs/', views.clear_logs_manual, name='clear_logs_manual'),
 
     # Algorithmic Market Radar
     path('radar/', views.market_radar, name='market_radar'),

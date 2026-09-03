@@ -3,77 +3,74 @@
 {% block title %}Trade Journal | NSE Engine{% endblock %}
 
 {% block content %}
-<div class="flex justify-between items-end mb-8 border-b border-dark-700 pb-4">
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-6 border-b border-slate-300 dark:border-dark-700 pb-4">
     <div>
-        <h2 class="text-3xl font-bold text-white tracking-wide">Trade Journal</h2>
-        <p class="text-sm text-gray-500 mt-1 uppercase tracking-widest font-mono">Realized Performance & Analytics</p>
+        <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-wide">Trade Journal</h2>
+        <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1 uppercase tracking-widest font-mono font-semibold">Historical ledger & performance metrics</p>
     </div>
 </div>
 
-<!-- Performance Metrics Cards -->
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-    <div class="bg-dark-800 border border-dark-700 rounded-xl p-6 shadow-lg">
-        <p class="text-xs text-gray-500 uppercase tracking-widest mb-1">Total Realized P&L</p>
-        <p class="text-3xl font-mono font-bold {% if total_realized >= 0 %}text-green-500{% else %}text-red-500{% endif %}">
-            <span class="text-gray-500 text-lg">KES</span> {% if total_realized > 0 %}+{% endif %}{{ total_realized|floatformat:2 }}
+<!-- Performance Summary -->
+<div class="bg-white dark:bg-dark-800 border border-slate-200 dark:border-dark-700 rounded-xl p-6 sm:p-8 mb-8 shadow-lg grid grid-cols-1 md:grid-cols-3 gap-6 text-center divide-y md:divide-y-0 md:divide-x divide-slate-200 dark:divide-dark-700 transition-colors">
+    <div class="pt-2 md:pt-0">
+        <p class="text-xs text-slate-600 dark:text-slate-300 font-bold uppercase tracking-widest mb-2 font-mono">Total Realized P&L</p>
+        <p class="text-2xl font-mono font-bold {% if total_realized >= 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+            <span class="text-slate-500 dark:text-slate-400 text-base">KES</span> {% if total_realized > 0 %}+{% endif %}{{ total_realized|floatformat:2|default:"0.00" }}
         </p>
     </div>
-
-    <div class="bg-dark-800 border border-dark-700 rounded-xl p-6 shadow-lg">
-        <p class="text-xs text-gray-500 uppercase tracking-widest mb-1">Win Rate</p>
-        <p class="text-3xl font-mono text-white">
-            {{ win_rate|floatformat:1 }}<span class="text-gold text-lg">%</span>
-        </p>
+    <div class="pt-4 md:pt-0">
+        <p class="text-xs text-slate-600 dark:text-slate-300 font-bold uppercase tracking-widest mb-2 font-mono">Win Rate</p>
+        <p class="text-2xl font-mono text-slate-900 dark:text-white font-bold">{{ win_rate|floatformat:1|default:"0.0" }}%</p>
     </div>
-
-    <div class="bg-dark-800 border border-dark-700 rounded-xl p-6 shadow-lg">
-        <p class="text-xs text-gray-500 uppercase tracking-widest mb-1">Total Closed Trades</p>
-        <p class="text-3xl font-mono text-white">
-            {{ total_trades }} <span class="text-gray-500 text-lg">Executions</span>
-        </p>
+    <div class="pt-4 md:pt-0">
+        <p class="text-xs text-slate-600 dark:text-slate-300 font-bold uppercase tracking-widest mb-2 font-mono">Closed Trades</p>
+        <p class="text-2xl font-mono text-slate-900 dark:text-white font-bold">{{ closed_trades_count|default:"0" }}</p>
     </div>
 </div>
 
-<!-- Closed Trades Ledger -->
-<div class="bg-dark-800 border border-dark-700 rounded-xl overflow-hidden shadow-lg">
-    <table class="w-full text-right">
+<!-- Historical Data Table -->
+<div class="bg-white dark:bg-dark-800 border border-slate-200 dark:border-dark-700 rounded-xl overflow-x-auto shadow-lg transition-colors mb-12">
+    <table class="w-full min-w-[700px] text-right">
         <thead>
-            <tr class="bg-dark-950/50 text-[10px] uppercase tracking-widest text-gray-500 border-b border-dark-700">
-                <th class="py-4 px-6 text-left font-normal">Security<br><span class="text-dark-700">|</span> Exit Date</th>
-                <th class="py-4 px-6 font-normal">Shares<br><span class="text-dark-700">|</span> Entry Price</th>
-                <th class="py-4 px-6 font-normal">Exit Price<br><span class="text-dark-700">|</span> Exit Reason</th>
-                <th class="py-4 px-6 font-normal">Realized P&L<br><span class="text-dark-700">|</span> ROI</th>
+            <tr class="bg-slate-100 dark:bg-dark-950/60 text-xs uppercase tracking-widest text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-dark-700 font-mono font-bold">
+                <th class="py-4 px-6 text-left">Asset</th>
+                <th class="py-4 px-6">Entry Data</th>
+                <th class="py-4 px-6">Exit Data</th>
+                <th class="py-4 px-6">Net Result</th>
+                <th class="py-4 px-6">Exit Reason</th>
             </tr>
         </thead>
-        <tbody class="divide-y divide-dark-700 text-sm">
-            {% for entry in entries %}
-            <tr class="hover:bg-dark-700/30 transition-colors">
+        <tbody class="divide-y divide-slate-200 dark:divide-dark-700 text-sm">
+            {% for trade in closed_trades %}
+            <tr class="hover:bg-slate-50 dark:hover:bg-dark-700/30 transition-colors">
                 <td class="py-4 px-6 text-left">
-                    <div class="font-bold text-gold text-lg tracking-wider">{{ entry.ticker }}</div>
-                    <div class="text-gray-500 font-mono text-xs mt-1">{{ entry.date_closed|date:"M d, Y" }}</div>
+                    <div class="font-bold text-gold text-lg tracking-wider">{{ trade.ticker }}</div>
+                    <div class="text-slate-600 dark:text-slate-400 font-mono text-xs mt-0.5 font-semibold">{{ trade.shares }} Shares</div>
                 </td>
-                
                 <td class="py-4 px-6 font-mono">
-                    <div class="text-white">{{ entry.shares }}</div>
-                    <div class="text-gray-500 text-xs mt-1">KES {{ entry.entry_price|floatformat:2 }}</div>
+                    <div class="text-slate-900 dark:text-white font-bold">{{ trade.entry_price|floatformat:2 }}</div>
+                    <div class="text-slate-600 dark:text-slate-400 text-[10px] mt-0.5">{{ trade.entry_date|date:"d M Y" }}</div>
                 </td>
-                
                 <td class="py-4 px-6 font-mono">
-                    <div class="text-white">KES {{ entry.exit_price|floatformat:2 }}</div>
-                    <div class="text-gray-500 text-[10px] uppercase tracking-wider mt-1">{{ entry.exit_reason }}</div>
+                    <div class="text-slate-900 dark:text-white font-bold">{{ trade.exit_price|floatformat:2 }}</div>
+                    <div class="text-slate-600 dark:text-slate-400 text-[10px] mt-0.5">{{ trade.exit_date|date:"d M Y" }}</div>
                 </td>
-                
                 <td class="py-4 px-6 font-mono">
-                    <div class="font-bold flex justify-end items-center gap-2 {% if entry.pnl_value >= 0 %}text-green-500{% else %}text-red-500{% endif %}">
-                        {% if entry.pnl_value > 0 %}+{% endif %}{{ entry.pnl_value|floatformat:2 }}
+                    <div class="font-bold {% if trade.pnl_value >= 0 %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+                        {% if trade.pnl_value > 0 %}+{% endif %}{{ trade.pnl_value|floatformat:2 }}
                     </div>
-                    <div class="text-gray-500 text-xs mt-1">{% if entry.pnl_percent > 0 %}+{% endif %}{{ entry.pnl_percent|floatformat:2 }}%</div>
+                    <div class="text-slate-600 dark:text-slate-400 text-xs mt-0.5">{% if trade.pnl_percent > 0 %}+{% endif %}{{ trade.pnl_percent|floatformat:2 }}%</div>
+                </td>
+                <td class="py-4 px-6">
+                    <span class="bg-slate-100 dark:bg-dark-900 border border-slate-300 dark:border-dark-700 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider inline-block">
+                        {{ trade.exit_reason|default:"Manual Exit" }}
+                    </span>
                 </td>
             </tr>
             {% empty %}
             <tr>
-                <td colspan="4" class="py-12 text-center text-gray-600 font-mono text-sm uppercase tracking-widest border-t border-dark-700">
-                    No trades have been closed out yet.
+                <td colspan="5" class="py-12 text-center text-slate-500 dark:text-slate-400 font-mono text-sm uppercase tracking-widest border-t border-slate-200 dark:border-dark-700">
+                    No closed trades recorded in the journal.
                 </td>
             </tr>
             {% endfor %}

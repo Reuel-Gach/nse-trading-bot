@@ -67,6 +67,24 @@ def _send_email_smtp(recipient_list: List[str], subject: str, email_body: str) -
         except:
             pass
 
+def _format_position_line(p: Dict[str, Any]) -> str:
+    """Formats a single active position into a breakdown showing quantity, current share price, total position value, and unrealized PnL."""
+    ticker = p.get("ticker", "UNKNOWN")
+    shares = int(p.get("shares", 0))
+    current_price = float(p.get("current", p.get("current_price", 0.0)))
+    entry_price = float(p.get("entry", p.get("entry_price", 0.0)))
+    
+    total_val = shares * current_price
+    pnl_val = float(p.get("pnl_val", (current_price - entry_price) * shares))
+    pnl_sign = "+" if pnl_val >= 0 else ""
+    
+    line = f"• {ticker}: {shares:,} shares @ Current Price: Ksh {current_price:,.2f}/sh\n"
+    line += f"  - Current Position Value : Ksh {total_val:,.2f}\n"
+    if entry_price > 0:
+        line += f"  - Avg Entry Price         : Ksh {entry_price:,.2f}\n"
+    line += f"  - Unrealized PnL          : {pnl_sign}Ksh {pnl_val:,.2f}\n"
+    return line
+
 def format_and_dispatch_signals(
     signals: List[Dict[str, Any]],
     system_health: Dict[str, Any] = None,
@@ -81,7 +99,6 @@ def format_and_dispatch_signals(
     now_eat = datetime.now().strftime("%d-%b-%Y")
     health = system_health or {}
     port = portfolio or {"total_equity": 0.0, "cash": 0.0, "realized_profit": 0.0, "open_positions": [], "username": "Trader"}
-    mkt = market_context or {}
 
     equity_str = f"Ksh {port['total_equity']:,.0f}"
     subject = f"🚨 NSE Tactical Buy Alert | Equity: {equity_str}"
@@ -94,17 +111,16 @@ def format_and_dispatch_signals(
     email_body += "💰 PORTFOLIO SUMMARY\n"
     email_body += "-" * 40 + "\n"
     email_body += f"Active Equity Value : Ksh {port['total_equity']:,.2f}\n"
+    email_body += f"Available Cash      : Ksh {port.get('cash', 0.0):,.2f}\n"
     email_body += f"Realized Profit     : Ksh {port.get('realized_profit', 0.0):,.2f}\n\n"
     
     positions = port.get("open_positions", [])
     if positions:
-        email_body += "Active Holdings:\n"
+        email_body += "Active Holdings (Valued at Current Price):\n"
         for p in positions:
-            pnl_str = f"{p.get('pnl_val', 0.0):+,.2f}"
-            email_body += f"• {p['ticker']}: {p.get('shares', 0)} shares | Price: Ksh {p.get('current', 0):.2f} | PnL: {pnl_str}\n"
+            email_body += _format_position_line(p) + "\n"
     else:
-        email_body += "Active Holdings: 100% Cash.\n"
-    email_body += "\n"
+        email_body += "Active Holdings: 100% Cash.\n\n"
 
     email_body += "🎯 HIGH-CONVICTION TACTICAL BUY SETUPS\n"
     email_body += "-" * 40 + "\n"
@@ -112,12 +128,13 @@ def format_and_dispatch_signals(
         for sig in signals:
             ticker = sig.get("ticker", "UNKNOWN")
             action = sig.get("action", "BUY")
-            sl = sig.get("suggested_stop_loss", 0.0)
+            current_price = float(sig.get("price", 0.0))
+            sl = float(sig.get("suggested_stop_loss", 0.0))
             reason = sig.get("reason", "Criteria met.")
             
-            email_body += f"🟢 {action}: {ticker} @ Ksh {sig.get('price', 0.0):.2f}\n"
+            email_body += f"🟢 {action}: {ticker} @ Current Price: Ksh {current_price:,.2f}\n"
             email_body += f"   Reason: {reason}\n"
-            email_body += f"   Stop Loss: Ksh {sl:.2f}\n\n"
+            email_body += f"   Suggested Stop Loss: Ksh {sl:,.2f}\n\n"
     else:
         email_body += "😴 No new tactical triggers in this cycle.\n\n"
 
@@ -152,36 +169,35 @@ def dispatch_eod_summary_report(
     email_body += "💰 PORTFOLIO & LEDGER SUMMARY\n"
     email_body += "-" * 40 + "\n"
     email_body += f"Active Equity Value : Ksh {portfolio.get('total_equity', 0.0):,.2f}\n"
+    email_body += f"Available Cash      : Ksh {portfolio.get('cash', 0.0):,.2f}\n"
     email_body += f"Realized Profit     : Ksh {portfolio.get('realized_profit', 0.0):,.2f}\n\n"
     
     positions = portfolio.get("open_positions", [])
     if positions:
-        email_body += "Active Holdings:\n"
+        email_body += "Active Holdings (Valued at Closing Market Price):\n"
         for p in positions:
-            pnl_str = f"{p.get('pnl_val', 0.0):+,.2f}"
-            email_body += f"• {p['ticker']}: {p.get('shares', 0)} shares | Price: Ksh {p.get('current', 0):.2f} | PnL: {pnl_str}\n"
+            email_body += _format_position_line(p) + "\n"
     else:
-        email_body += "Active Holdings: 100% Cash.\n"
-    email_body += "\n"
+        email_body += "Active Holdings: 100% Cash.\n\n"
 
     email_body += f"🎯 TODAY'S PROCESSED BUY SIGNALS ({len(all_signals)})\n"
     email_body += "-" * 40 + "\n"
     if all_signals:
         for sig in all_signals:
             ticker = sig.get("ticker", "UNKNOWN")
-            price = sig.get("price", 0.0)
-            sl = sig.get("suggested_stop_loss", 0.0)
+            price = float(sig.get("price", 0.0))
+            sl = float(sig.get("suggested_stop_loss", 0.0))
             reason = sig.get("reason", "Criteria met.")
-            email_body += f"🟢 BUY: {ticker} @ Ksh {price:.2f}\n"
+            email_body += f"🟢 BUY: {ticker} @ Closing Price: Ksh {price:,.2f}\n"
             email_body += f"   Reason: {reason}\n"
-            email_body += f"   Stop Loss: Ksh {sl:.2f}\n\n"
+            email_body += f"   Stop Loss: Ksh {sl:,.2f}\n\n"
     else:
         email_body += "😴 No high-conviction buy setups triggered during today's session. Cash preserved.\n\n"
 
     email_body += "⚙️ MARKET SESSION CLOSED\n"
     email_body += "-" * 40 + "\n"
     email_body += "All 20-minute intraday cycles complete. Bot resting until tomorrow's open.\n\n"
-    email_body += "Automated by Reuel & Banice's NSE Trading Bot"
+    email_body += "Automated by Reuel's & Banice's NSE Trading Bot"
 
     _send_email_smtp(recipient_list, subject, email_body)
     print("---------------------------------------\n")

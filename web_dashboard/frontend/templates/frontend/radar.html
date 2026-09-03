@@ -1,0 +1,241 @@
+{% extends 'frontend/base.html' %}
+
+{% block title %}Market Radar | NSE Engine{% endblock %}
+
+{% block content %}
+<!-- Header Section -->
+<div class="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 mb-8 border-b border-slate-300 dark:border-dark-700 pb-6 transition-colors">
+    <div>
+        <div class="flex items-center gap-3 mb-2">
+            <!-- Dynamic Market Status Badge -->
+            <div id="marketStatusBadge" class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-200 dark:bg-dark-900 border border-slate-300 dark:border-dark-700 text-xs font-mono transition-colors">
+                <span id="marketDot" class="w-2.5 h-2.5 rounded-full bg-gray-500"></span>
+                <span id="marketText" class="text-slate-700 dark:text-gray-400 font-bold uppercase tracking-wider">Checking Market...</span>
+            </div>
+            <span class="text-xs font-mono text-gold uppercase tracking-widest hidden sm:inline">| EAT Session</span>
+        </div>
+        <h2 class="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">Market Radar</h2>
+        <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-400 font-mono tracking-widest uppercase mt-1 font-semibold">Multi-Factor Algorithmic Screening Terminal</p>
+    </div>
+    
+    <form action="{% url 'refresh_market_data' %}" method="POST" class="w-full lg:w-auto">
+        {% csrf_token %}
+        <button type="submit" class="group relative w-full lg:w-auto flex items-center justify-center gap-2 bg-gold text-black font-extrabold px-6 py-3.5 rounded-xl overflow-hidden transition-all shadow-md hover:bg-gold-light hover:-translate-y-0.5">
+            <svg class="w-5 h-5 transition-transform group-hover:rotate-180 duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span class="font-mono uppercase tracking-widest text-xs">Force Market Scan</span>
+        </button>
+    </form>
+</div>
+
+<!-- Telemetry Summary Grid -->
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-8">
+    <div class="bg-white dark:bg-dark-800 border border-slate-200 dark:border-gold/30 rounded-2xl p-6 shadow-lg relative overflow-hidden transition-colors">
+        <div class="absolute top-0 right-0 w-24 h-24 bg-gold/10 dark:bg-gold/5 rounded-bl-full -mr-6 -mt-6"></div>
+        <p class="text-xs font-mono font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest mb-1">Active Signals</p>
+        <div class="flex items-end gap-3 mt-2">
+            <h3 class="text-4xl font-black text-slate-900 dark:text-white font-mono">{{ signals|length }}</h3>
+            <span class="text-xs font-mono text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider font-semibold">Targets Flagged</span>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-dark-800 border border-slate-200 dark:border-dark-700 rounded-2xl p-6 shadow-lg relative overflow-hidden transition-colors">
+        <p class="text-xs font-mono font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest mb-1">Engine Protocol</p>
+        <div class="flex items-center gap-3 mt-3">
+            <div class="p-2 bg-gold/10 rounded-lg border border-gold/20">
+                <svg class="w-5 h-5 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+                </svg>
+            </div>
+            <div>
+                <h4 class="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider font-mono">Confluence V2</h4>
+                <p class="text-[10px] font-mono text-slate-500 dark:text-slate-400 tracking-widest">Active Scanning</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-dark-800 border border-slate-200 dark:border-dark-700 rounded-2xl p-6 shadow-lg relative overflow-hidden transition-colors">
+        <p class="text-xs font-mono font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest mb-1">Database Sync</p>
+        <div class="flex items-center gap-3 mt-3">
+            <div class="p-2 bg-slate-100 dark:bg-dark-900 rounded-lg border border-slate-300 dark:border-dark-700">
+                <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <div>
+                <h4 class="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider font-mono">Synced</h4>
+                <p class="text-[10px] font-mono text-slate-500 dark:text-slate-400 tracking-widest">SQLite & CSV Linked</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Responsive Screener View -->
+<div class="bg-white dark:bg-dark-800 border border-slate-200 dark:border-dark-700 rounded-2xl shadow-xl overflow-hidden mb-12 relative transition-colors">
+    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-gold to-transparent opacity-70"></div>
+
+    <!-- Desktop Table View -->
+    <div class="hidden md:block overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="bg-slate-100 dark:bg-dark-950/60 text-[11px] uppercase tracking-widest text-slate-700 dark:text-slate-400 font-mono border-b border-slate-200 dark:border-dark-700 font-bold">
+                    <th class="py-4 px-6">Target Asset</th>
+                    <th class="py-4 px-6 text-right">LTP (KES)</th>
+                    <th class="py-4 px-6 text-center">Decision Vector</th>
+                    <th class="py-4 px-6 text-center">Confidence</th>
+                    <th class="py-4 px-6">Technical Confluence Justification</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 dark:divide-dark-700/60 text-sm">
+                {% for signal in signals %}
+                <tr class="hover:bg-slate-50 dark:hover:bg-dark-700/30 transition-all group">
+                    <td class="py-4 px-6">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-dark-900 border border-gold/40 flex items-center justify-center text-gold font-black font-mono shadow-sm">
+                                {{ signal.ticker|slice:":2" }}
+                            </div>
+                            <div>
+                                <div class="font-bold text-slate-900 dark:text-white text-base tracking-wider">{{ signal.ticker }}</div>
+                                <div class="text-[10px] text-slate-500 dark:text-slate-400 font-mono uppercase tracking-widest font-semibold">NSE Main Board</div>
+                            </div>
+                        </div>
+                    </td>
+                    
+                    <td class="py-4 px-6 text-right">
+                        <div class="font-mono text-slate-900 dark:text-white font-bold text-base">{{ signal.price|floatformat:2 }}</div>
+                    </td>
+                    
+                    <td class="py-4 px-6 text-center">
+                        {% with act=signal.action|upper %}
+                            {% if 'BUY' in act %}
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-green-100 dark:bg-green-950/60 border border-green-500 text-green-700 dark:text-green-400 text-xs font-bold font-mono tracking-widest shadow-sm">
+                                🟢 STRONG BUY
+                            </span>
+                            {% elif 'SELL' in act %}
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-red-100 dark:bg-red-950/60 border border-red-500 text-red-700 dark:text-red-400 text-xs font-bold font-mono tracking-widest shadow-sm">
+                                🔴 SELL
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-amber-100 dark:bg-amber-950/60 border border-amber-500 text-amber-800 dark:text-amber-400 text-xs font-bold font-mono tracking-widest shadow-sm">
+                                🟡 NEUTRAL / HOLD
+                            </span>
+                            {% endif %}
+                        {% endwith %}
+                    </td>
+
+                    <td class="py-4 px-6 text-center">
+                        <div class="flex flex-col items-center">
+                            <span class="font-mono text-xs font-bold text-gold mb-1">{{ signal.confidence|default:"85" }}%</span>
+                            <div class="w-20 bg-slate-200 dark:bg-dark-900 rounded-full h-1.5 overflow-hidden border border-slate-300 dark:border-dark-700">
+                                <div class="bg-gold h-full rounded-full" style="width: {{ signal.confidence|default:85 }}%;"></div>
+                            </div>
+                        </div>
+                    </td>
+                    
+                    <td class="py-4 px-6">
+                        <div class="bg-slate-100 dark:bg-dark-900/60 p-2.5 rounded-lg border border-slate-200 dark:border-dark-700/60">
+                            <span class="text-xs text-slate-700 dark:text-slate-300 font-mono leading-relaxed">{{ signal.reason|default:"Multi-factor indicator alignment met." }}</span>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="py-16 text-center">
+                        <p class="text-slate-500 dark:text-slate-400 font-mono text-xs uppercase tracking-widest font-semibold">No tactical triggers detected in current dataset.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Mobile Stacked Card View -->
+    <div class="block md:hidden divide-y divide-slate-200 dark:divide-dark-700">
+        {% for signal in signals %}
+        <div class="p-5 space-y-4 hover:bg-slate-50 dark:hover:bg-dark-700/20 transition-colors">
+            <div class="flex justify-between items-start">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-dark-900 border border-gold/40 flex items-center justify-center text-gold font-black font-mono">
+                        {{ signal.ticker|slice:":2" }}
+                    </div>
+                    <div>
+                        <div class="font-bold text-slate-900 dark:text-white text-lg tracking-wider">{{ signal.ticker }}</div>
+                        <div class="text-[10px] text-slate-500 dark:text-slate-400 font-mono uppercase font-semibold">LTP: KES {{ signal.price|floatformat:2 }}</div>
+                    </div>
+                </div>
+                
+                <div>
+                    {% with act=signal.action|upper %}
+                        {% if 'BUY' in act %}
+                        <span class="px-2.5 py-1 rounded bg-green-100 dark:bg-green-950/60 border border-green-500 text-green-700 dark:text-green-400 text-[10px] font-bold font-mono">BUY</span>
+                        {% elif 'SELL' in act %}
+                        <span class="px-2.5 py-1 rounded bg-red-100 dark:bg-red-950/60 border border-red-500 text-red-700 dark:text-red-400 text-[10px] font-bold font-mono">SELL</span>
+                        {% else %}
+                        <span class="px-2.5 py-1 rounded bg-amber-100 dark:bg-amber-950/60 border border-amber-500 text-amber-800 dark:text-amber-400 text-[10px] font-bold font-mono">NEUTRAL</span>
+                        {% endif %}
+                    {% endwith %}
+                </div>
+            </div>
+
+            <!-- Confidence Bar Mobile -->
+            <div class="bg-slate-100 dark:bg-dark-900 p-3 rounded-xl border border-slate-200 dark:border-dark-700/60 space-y-1.5">
+                <div class="flex justify-between text-[11px] font-mono">
+                    <span class="text-slate-600 dark:text-slate-400 uppercase font-bold">Algorithm Confidence</span>
+                    <span class="text-gold font-bold">{{ signal.confidence|default:"85" }}%</span>
+                </div>
+                <div class="w-full bg-slate-200 dark:bg-dark-950 rounded-full h-1.5 overflow-hidden border border-slate-300 dark:border-dark-700">
+                    <div class="bg-gold h-full rounded-full" style="width: {{ signal.confidence|default:85 }}%;"></div>
+                </div>
+            </div>
+
+            <div class="bg-slate-100 dark:bg-dark-900/60 p-3 rounded-xl border border-slate-200 dark:border-dark-700">
+                <p class="text-[10px] font-mono text-slate-500 dark:text-slate-400 uppercase mb-1 font-bold">Justification</p>
+                <p class="text-xs text-slate-700 dark:text-slate-300 font-mono leading-relaxed">{{ signal.reason|default:"Multi-factor indicator alignment met." }}</p>
+            </div>
+        </div>
+        {% empty %}
+        <div class="py-12 text-center">
+            <p class="text-slate-500 dark:text-slate-400 font-mono text-xs uppercase tracking-widest font-semibold">No active tactical triggers.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Real-Time EAT Market Status Calculator (M-F, 09:00 - 15:00 EAT)
+    function checkMarketStatus() {
+        const now = new Date();
+        const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+        const eatTime = new Date(utc + (3600000 * 3));
+        
+        const day = eatTime.getDay();
+        const hour = eatTime.getHours();
+        const minute = eatTime.getMinutes();
+        const timeVal = hour * 100 + minute;
+
+        const isWeekday = (day >= 1 && day <= 5);
+        const isTradingHours = (timeVal >= 900 && timeVal <= 1500);
+
+        const dot = document.getElementById('marketDot');
+        const text = document.getElementById('marketText');
+        const badge = document.getElementById('marketStatusBadge');
+
+        if (isWeekday && isTradingHours) {
+            dot.className = "w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse";
+            text.className = "text-green-600 dark:text-green-400 font-bold uppercase tracking-wider text-xs";
+            text.innerText = "NSE Market Live";
+            badge.className = "inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-100 dark:bg-green-950/40 border border-green-500/50 text-xs font-mono";
+        } else {
+            dot.className = "w-2.5 h-2.5 rounded-full bg-amber-500";
+            text.className = "text-amber-700 dark:text-amber-400 font-bold uppercase tracking-wider text-xs";
+            text.innerText = "Market Closed / Resting";
+            badge.className = "inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-950/40 border border-amber-500/50 text-xs font-mono";
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', checkMarketStatus);
+</script>
+{% endblock %}

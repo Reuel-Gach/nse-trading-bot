@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-eduveijkrj)l(c75u4g!mbdekm_tf!in_+6qy)2hvo)deg-6it
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['nse.local', 'localhost', '127.0.0.1', '*']
 
 
 # Application definition
@@ -120,6 +120,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
-# Authentication Redirects
-LOGIN_REDIRECT_URL = 'dashboard'
+## Authentication Routing
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = 'login'
