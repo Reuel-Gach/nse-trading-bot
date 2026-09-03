@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import pandas as pd
 import time
+import random
 from datetime import datetime
 import re
 
@@ -24,7 +25,7 @@ def parse_volume_string(vol_str: str):
 def scrape_mystocks_mobile(tickers: list) -> pd.DataFrame:
     """
     Scrapes today's EOD closing prices and volumes from live.mystocks.co.ke/m/
-    Includes automatic retry logic and extended timeouts to handle server jitter.
+    Includes exponential backoff and randomized jitter delays to prevent server-side 503 overloads.
     """
     base_url = "https://live.mystocks.co.ke/m/stock="
     headers = {
@@ -49,15 +50,22 @@ def scrape_mystocks_mobile(tickers: list) -> pd.DataFrame:
         for attempt in range(retries):
             try:
                 print(f"  -> Fetching {ticker} (Attempt {attempt + 1}/{retries})...")
-                # Increased timeout to 15 seconds to prevent quick dropouts
                 response = requests.get(target_url, headers=headers, timeout=15)
+
+                # Check explicitly for server-side errors
+                if response.status_code == 503:
+                    wait_time = (attempt + 1) * 5  # 5s, then 10s, then 15s
+                    print(f"⚠️ Server 503 Unavailable for {ticker}. Backing off for {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+
                 response.raise_for_status()
                 soup = BeautifulSoup(response.text, 'html.parser')
-                
+
                 # 1. Extract Price using the "Average:" field
                 for element in soup.find_all(['li', 'tr', 'div', 'p']):
                     text = element.get_text(" | ", strip=True)
-                    
+
                     if "Average:" in text:
                         parts = [p.strip() for p in text.split("|")]
                         for idx, part in enumerate(parts):
@@ -68,7 +76,7 @@ def scrape_mystocks_mobile(tickers: list) -> pd.DataFrame:
                                     data_row['close'] = float(match.group(0))
                                     break
 
-                    # 2. Extract Volume (e.g., "Volume: | 2.31M")
+                    # 2. Extract Volume
                     if "Volume:" in text and "Average Volume:" not in text:
                         parts = [p.strip() for p in text.split("|")]
                         for idx, part in enumerate(parts):
@@ -76,7 +84,7 @@ def scrape_mystocks_mobile(tickers: list) -> pd.DataFrame:
                                 vol_str = parts[idx + 1]
                                 data_row['volume'] = parse_volume_string(vol_str)
                                 break
-                
+                            
                 # Fallback for close price if 'Average:' wasn't found
                 if data_row['close'] is None:
                     headline_match = re.search(r'KES\s*([\d,]+\.\d{2})', soup.get_text())
@@ -84,14 +92,16 @@ def scrape_mystocks_mobile(tickers: list) -> pd.DataFrame:
                         data_row['close'] = float(headline_match.group(1).replace(',', ''))
 
                 success = True
-                break # Break out of retry loop on success
-                
+                break
+
             except requests.exceptions.Timeout:
-                print(f"⚠️ Timeout for {ticker} on attempt {attempt + 1}. Retrying in 3s...")
-                time.sleep(3)
+                wait_time = (attempt + 1) * 3
+                print(f"⚠️ Timeout for {ticker}. Backing off for {wait_time}s...")
+                time.sleep(wait_time)
             except requests.exceptions.RequestException as e:
-                print(f"⚠️ Network error for {ticker} on attempt {attempt + 1}: {e}. Retrying in 3s...")
-                time.sleep(3)
+                wait_time = (attempt + 1) * 3
+                print(f"⚠️ Network error for {ticker}: {e}. Backing off for {wait_time}s...")
+                time.sleep(wait_time)
             except Exception as e:
                 print(f"❌ Unexpected error for {ticker}: {e}")
                 break
@@ -100,6 +110,9 @@ def scrape_mystocks_mobile(tickers: list) -> pd.DataFrame:
             print(f"❌ Failed to fetch {ticker} after {retries} attempts.")
 
         scraped_data.append(data_row)
-        time.sleep(2) # Polite rate limiting between successful/attempted tickers
+        
+        # Apply randomized jitter delay (between 2.5 and 5.5 seconds) instead of a rigid pause
+        jitter_delay = random.uniform(2.5, 5.5)
+        time.sleep(jitter_delay)
 
     return pd.DataFrame(scraped_data)

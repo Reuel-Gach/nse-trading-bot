@@ -1,5 +1,14 @@
 [
     {
+        "ticker": "SASN",
+        "price": 25.0,
+        "rsi": 57.8,
+        "action": "STRONG BUY",
+        "reason": "High-Conviction Setup: Momentum Breakout (High Volume) + Bollinger Breakout",
+        "confidence": 90.0,
+        "suggested_stop_loss": 24.23
+    },
+    {
         "ticker": "CABL",
         "price": 1.0,
         "rsi": 21.2,
@@ -19,12 +28,12 @@
     },
     {
         "ticker": "ABSA",
-        "price": 0.0,
-        "rsi": 70.5,
+        "price": 35.0,
+        "rsi": 71.7,
         "action": "STRONG SELL",
-        "reason": "Overbought Territory (RSI: 70.5)",
+        "reason": "Overbought Territory (RSI: 71.7)",
         "confidence": 80.0,
-        "suggested_stop_loss": 0.0
+        "suggested_stop_loss": 36.75
     },
     {
         "ticker": "ALP",
@@ -46,12 +55,21 @@
     },
     {
         "ticker": "DTK",
-        "price": 0.0,
+        "price": 193.0,
         "rsi": 88.2,
         "action": "STRONG SELL",
         "reason": "Overbought Territory (RSI: 88.2)",
         "confidence": 80.0,
-        "suggested_stop_loss": 0.0
+        "suggested_stop_loss": 202.65
+    },
+    {
+        "ticker": "EABL",
+        "price": 294.0,
+        "rsi": 73.0,
+        "action": "STRONG SELL",
+        "reason": "Overbought Territory (RSI: 73.0)",
+        "confidence": 80.0,
+        "suggested_stop_loss": 308.7
     },
     {
         "ticker": "EQTY",
@@ -64,30 +82,30 @@
     },
     {
         "ticker": "IMH",
-        "price": 0.0,
-        "rsi": 82.4,
+        "price": 81.25,
+        "rsi": 83.0,
         "action": "STRONG SELL",
-        "reason": "Overbought Territory (RSI: 82.4)",
+        "reason": "Overbought Territory (RSI: 83.0)",
         "confidence": 80.0,
-        "suggested_stop_loss": 0.0
+        "suggested_stop_loss": 85.31
     },
     {
         "ticker": "KCB",
-        "price": 98.0,
-        "rsi": 80.7,
+        "price": 97.75,
+        "rsi": 79.5,
         "action": "STRONG SELL",
-        "reason": "Overbought Territory (RSI: 80.7)",
+        "reason": "Overbought Territory (RSI: 79.5)",
         "confidence": 80.0,
-        "suggested_stop_loss": 102.9
+        "suggested_stop_loss": 102.64
     },
     {
         "ticker": "KEGN",
-        "price": 12.5,
-        "rsi": 81.8,
+        "price": 12.75,
+        "rsi": 83.3,
         "action": "STRONG SELL",
-        "reason": "Overbought Territory (RSI: 81.8)",
+        "reason": "Overbought Territory (RSI: 83.3)",
         "confidence": 80.0,
-        "suggested_stop_loss": 13.12
+        "suggested_stop_loss": 13.39
     },
     {
         "ticker": "KPC",
@@ -126,22 +144,31 @@
         "suggested_stop_loss": 564.9
     },
     {
-        "ticker": "NSE",
-        "price": 29.5,
-        "rsi": 77.8,
+        "ticker": "NMG",
+        "price": 16.5,
+        "rsi": 74.6,
         "action": "STRONG SELL",
-        "reason": "Overbought Territory (RSI: 77.8)",
+        "reason": "Overbought Territory (RSI: 74.6)",
         "confidence": 80.0,
-        "suggested_stop_loss": 30.98
+        "suggested_stop_loss": 17.32
+    },
+    {
+        "ticker": "NSE",
+        "price": 29.4,
+        "rsi": 77.5,
+        "action": "STRONG SELL",
+        "reason": "Overbought Territory (RSI: 77.5)",
+        "confidence": 80.0,
+        "suggested_stop_loss": 30.87
     },
     {
         "ticker": "TOTL",
-        "price": 49.1,
-        "rsi": 72.1,
+        "price": 49.0,
+        "rsi": 71.7,
         "action": "STRONG SELL",
-        "reason": "Overbought Territory (RSI: 72.1)",
+        "reason": "Overbought Territory (RSI: 71.7)",
         "confidence": 80.0,
-        "suggested_stop_loss": 51.56
+        "suggested_stop_loss": 51.45
     },
     {
         "ticker": "AMAC",
@@ -172,12 +199,12 @@
     },
     {
         "ticker": "BAT",
-        "price": 0.0,
-        "rsi": 49.1,
+        "price": 570.0,
+        "rsi": 61.1,
         "action": "NEUTRAL",
-        "reason": "Consolidating (RSI: 49.1)",
+        "reason": "Consolidating (RSI: 61.1)",
         "confidence": 50.0,
-        "suggested_stop_loss": 0.0
+        "suggested_stop_loss": 513.0
     },
     {
         "ticker": "BKG",
@@ -208,30 +235,30 @@
     },
     {
         "ticker": "CARB",
-        "price": 41.0,
-        "rsi": 56.6,
+        "price": 42.0,
+        "rsi": 60.8,
         "action": "NEUTRAL",
-        "reason": "Consolidating (RSI: 56.6)",
+        "reason": "Consolidating (RSI: 60.8)",
         "confidence": 50.0,
-        "suggested_stop_loss": 36.9
+        "suggested_stop_loss": 37.8
     },
     {
         "ticker": "CGEN",
-        "price": 297.0,
-        "rsi": 62.4,
-        "action": "NEUTRAL",
-        "reason": "Consolidating (RSI: 62.4)",
-        "confidence": 50.0,
-        "suggested_stop_loss": 267.3
-    },
-    {
-        "ticker": "COOP",
-        "price": 0.0,
+        "price": 292.0,
         "rsi": 61.3,
         "action": "NEUTRAL",
         "reason": "Consolidating (RSI: 61.3)",
         "confidence": 50.0,
-        "suggested_stop_loss": 0.0
+        "suggested_stop_loss": 262.8
+    },
+    {
+        "ticker": "COOP",
+        "price": 38.0,
+        "rsi": 64.9,
+        "action": "NEUTRAL",
+        "reason": "Consolidating (RSI: 64.9)",
+        "confidence": 50.0,
+        "suggested_stop_loss": 34.2
     },
     {
         "ticker": "CRWN",
@@ -259,15 +286,6 @@
         "reason": "Consolidating (RSI: 50.0)",
         "confidence": 50.0,
         "suggested_stop_loss": 0.41
-    },
-    {
-        "ticker": "EABL",
-        "price": 0.0,
-        "rsi": 69.2,
-        "action": "NEUTRAL",
-        "reason": "Consolidating (RSI: 69.2)",
-        "confidence": 50.0,
-        "suggested_stop_loss": 0.0
     },
     {
         "ticker": "EGAD",
@@ -334,12 +352,12 @@
     },
     {
         "ticker": "HFCK",
-        "price": 0.0,
-        "rsi": 56.0,
+        "price": 12.8,
+        "rsi": 62.1,
         "action": "NEUTRAL",
-        "reason": "Consolidating (RSI: 56.0)",
+        "reason": "Consolidating (RSI: 62.1)",
         "confidence": 50.0,
-        "suggested_stop_loss": 0.0
+        "suggested_stop_loss": 11.52
     },
     {
         "ticker": "JUB",
@@ -352,12 +370,12 @@
     },
     {
         "ticker": "KAPC",
-        "price": 339.0,
-        "rsi": 56.9,
+        "price": 337.0,
+        "rsi": 55.3,
         "action": "NEUTRAL",
-        "reason": "Consolidating (RSI: 56.9)",
+        "reason": "Consolidating (RSI: 55.3)",
         "confidence": 50.0,
-        "suggested_stop_loss": 305.1
+        "suggested_stop_loss": 303.3
     },
     {
         "ticker": "KNRE",
@@ -442,30 +460,21 @@
     },
     {
         "ticker": "NBV",
-        "price": 0.0,
+        "price": 1.38,
         "rsi": 56.7,
         "action": "NEUTRAL",
         "reason": "Consolidating (RSI: 56.7)",
         "confidence": 50.0,
-        "suggested_stop_loss": 0.0
+        "suggested_stop_loss": 1.24
     },
     {
         "ticker": "NCBA",
-        "price": 0.0,
-        "rsi": 53.0,
+        "price": 92.0,
+        "rsi": 57.6,
         "action": "NEUTRAL",
-        "reason": "Consolidating (RSI: 53.0)",
+        "reason": "Consolidating (RSI: 57.6)",
         "confidence": 50.0,
-        "suggested_stop_loss": 0.0
-    },
-    {
-        "ticker": "NMG",
-        "price": 0.0,
-        "rsi": 70.0,
-        "action": "NEUTRAL",
-        "reason": "Consolidating (RSI: 70.0)",
-        "confidence": 50.0,
-        "suggested_stop_loss": 0.0
+        "suggested_stop_loss": 82.8
     },
     {
         "ticker": "OCH",
@@ -486,31 +495,22 @@
         "suggested_stop_loss": 83.03
     },
     {
-        "ticker": "SASN",
-        "price": 24.8,
-        "rsi": 56.3,
-        "action": "NEUTRAL",
-        "reason": "Consolidating (RSI: 56.3)",
-        "confidence": 50.0,
-        "suggested_stop_loss": 22.32
-    },
-    {
         "ticker": "SBIC",
-        "price": 0.0,
-        "rsi": 37.7,
+        "price": 274.25,
+        "rsi": 46.8,
         "action": "NEUTRAL",
-        "reason": "Consolidating (RSI: 37.7)",
+        "reason": "Consolidating (RSI: 46.8)",
         "confidence": 50.0,
-        "suggested_stop_loss": 0.0
+        "suggested_stop_loss": 246.83
     },
     {
         "ticker": "SCAN",
-        "price": 0.0,
-        "rsi": 48.1,
+        "price": 2.1,
+        "rsi": 52.4,
         "action": "NEUTRAL",
-        "reason": "Consolidating (RSI: 48.1)",
+        "reason": "Consolidating (RSI: 52.4)",
         "confidence": 50.0,
-        "suggested_stop_loss": 0.0
+        "suggested_stop_loss": 1.89
     },
     {
         "ticker": "SCBK",
@@ -523,21 +523,21 @@
     },
     {
         "ticker": "SCOM",
-        "price": 37.9,
-        "rsi": 68.4,
+        "price": 37.85,
+        "rsi": 67.7,
         "action": "NEUTRAL",
-        "reason": "Consolidating (RSI: 68.4)",
+        "reason": "Consolidating (RSI: 67.7)",
         "confidence": 50.0,
-        "suggested_stop_loss": 34.11
+        "suggested_stop_loss": 34.07
     },
     {
         "ticker": "SGL",
-        "price": 6.1,
-        "rsi": 49.9,
+        "price": 6.02,
+        "rsi": 48.0,
         "action": "NEUTRAL",
-        "reason": "Consolidating (RSI: 49.9)",
+        "reason": "Consolidating (RSI: 48.0)",
         "confidence": 50.0,
-        "suggested_stop_loss": 5.49
+        "suggested_stop_loss": 5.42
     },
     {
         "ticker": "SKL",
@@ -604,12 +604,12 @@
     },
     {
         "ticker": "UMME",
-        "price": 6.32,
-        "rsi": 36.2,
+        "price": 6.4,
+        "rsi": 38.0,
         "action": "NEUTRAL",
-        "reason": "Consolidating (RSI: 36.2)",
+        "reason": "Consolidating (RSI: 38.0)",
         "confidence": 50.0,
-        "suggested_stop_loss": 5.69
+        "suggested_stop_loss": 5.76
     },
     {
         "ticker": "UNGA",
@@ -622,12 +622,12 @@
     },
     {
         "ticker": "WTK",
-        "price": 154.75,
-        "rsi": 55.5,
+        "price": 156.0,
+        "rsi": 59.5,
         "action": "NEUTRAL",
-        "reason": "Consolidating (RSI: 55.5)",
+        "reason": "Consolidating (RSI: 59.5)",
         "confidence": 50.0,
-        "suggested_stop_loss": 139.28
+        "suggested_stop_loss": 140.4
     },
     {
         "ticker": "XPRS",
